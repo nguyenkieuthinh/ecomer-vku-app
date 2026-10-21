@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Anh chup tu camera luu tam trong cache cua app. -->
+    <cache-path
+        name="captured_images"
+        path="images/" />
+</paths>

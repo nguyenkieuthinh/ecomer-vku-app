@@ -1,0 +1,19 @@
+# Gradle / build
+.gradle/
+build/
+app/build/
+local.properties
+
+# Firebase — chua API key, KHONG commit
+app/google-services.json
+google-services.json
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# File cua he thong
+captures/
+.externalNativeBuild/
+.cxx/

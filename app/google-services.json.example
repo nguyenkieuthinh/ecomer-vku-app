@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "PROJECT_NUMBER",
+    "project_id": "PROJECT_ID",
+    "storage_bucket": "PROJECT_ID.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:PROJECT_NUMBER:android:APP_ID_HASH",
+        "android_client_info": {
+          "package_name": "com.ecomer.vku.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "WEB_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 3
+        },
+        {
+          "client_id": "ANDROID_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ecomer.vku.app",
+            "certificate_hash": "SHA1_HEX_KHONG_CO_DAU_HAI_CHAM"
+          }
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "WEB_CLIENT_ID.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

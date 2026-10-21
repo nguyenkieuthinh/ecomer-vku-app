@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Gio hang -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,38h32l-3.5,20h-25z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,32h40v5h-40z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,64m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,64m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
+</vector>

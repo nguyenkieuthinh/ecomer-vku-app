@@ -1,0 +1,105 @@
+rules_version = '2';
+
+// Security Rules cho app ECOMER.
+//
+// Cách dùng: Firebase Console -> Firestore Database -> Rules -> dán toàn bộ
+// nội dung file này -> Publish.
+//
+// Vai tro admin duoc xac dinh bang email (khop voi User.ADMIN_EMAILS trong
+// code). Rules dung `request.auth.token.email` nen nguoi dung KHONG the tu
+// sua role trong Firestore de len admin.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Admin ---
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email in [
+          'admin@ecomer.vn'
+        ];
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // --- San pham ---
+    // Doc cho tat ca (khach chua dang nhap van xem duoc cua hang).
+    //
+    // Ghi: chi admin them / sua / xoa. Ngoai ra, KHACH da dang nhap duoc phep
+    // giam ton kho khi dat hang — chi cho doi `availableStock` va `soldCount`,
+    // khong duoc sua ten, gia hay anh. Ton kho chi duoc GIAM, so da ban chi duoc TANG.
+    match /products/{productId} {
+      allow read: if true;
+
+      allow create, delete: if isAdmin();
+
+      allow update: if isAdmin()
+        || (request.auth != null
+            && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['availableStock', 'soldCount'])
+            && request.resource.data.availableStock
+               <= resource.data.availableStock
+            && request.resource.data.soldCount
+               >= resource.data.soldCount);
+    }
+
+    // --- Anh san pham ---
+    // Moi anh mot document rieng, nen giới han 1 MiB ap dung cho tung anh.
+    match /product_images/{imageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- Bo dem sinh id theo loai ---
+    // Chi admin duoc dung va sua.
+    match /counters/{typeSlug} {
+      allow read, write: if isAdmin();
+    }
+
+    // --- Ho so nguoi dung ---
+    // Nguoi dung doc/sua ho so cua minh. Khong ai duoc tu dat role "admin":
+    // role moi phai giong role cu (neu doi role thi chi admin moi lam duoc).
+    // `role` trong Firestore chi de hien thi — quyen thuc su duoc quyet dinh
+    // bang email trong token (ham isAdmin o tren).
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+
+      allow create: if isOwner(uid)
+        && request.resource.data.role == 'user';
+
+      allow update: if isAdmin()
+        || (isOwner(uid)
+          && request.resource.data.role == resource.data.role);
+
+      allow delete: if isAdmin();
+    }
+
+    // --- Dia chi giao hang ---
+    // Luu trong subcollection `users/{uid}/addresses` — moi nguoi chi quan ly
+    // duoc dia chi cua chinh minh.
+    match /users/{uid}/addresses/{addressId} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    // --- Gio hang ---
+    // Document id chinh la uid, nen moi nguoi chi thay duoc gio hang cua minh.
+    match /carts/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    // --- Don hang ---
+    // Nguoi dung doc don cua minh, tao don moi bang chinh tai khoan dang nhap.
+    match /orders/{orderId} {
+      allow read: if isAdmin()
+        || (request.auth != null && resource.data.userId == request.auth.uid);
+
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

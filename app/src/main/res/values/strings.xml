@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">ECOMER</string>
+
+    <string name="tab_home">Shop</string>
+    <string name="tab_cart">Giỏ hàng</string>
+    <string name="tab_orders">Đơn hàng</string>
+    <string name="tab_account">Tài khoản</string>
+</resources>
