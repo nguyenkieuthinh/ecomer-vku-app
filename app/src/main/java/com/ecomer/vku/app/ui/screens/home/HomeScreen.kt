@@ -157,14 +157,14 @@ fun ProductCard(
     ) {
         ProductImage(
             imageUrl = imageUrl,
-            contentDescription = product.name,
+            contentDescription = product.tenSanPham,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(120.dp),
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = product.name,
+            text = product.tenSanPham,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = EcomerTextPrimary,
@@ -172,7 +172,7 @@ fun ProductCard(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = formatPrice(product.price),
+            text = formatPrice(product.gia),
             fontSize = 13.sp,
             color = EcomerTextMuted,
         )

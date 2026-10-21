@@ -110,7 +110,7 @@ fun ProductDetailScreen(
         // Anh lon — bam vao de xem phong to.
         ProductImage(
             imageUrl = images.getOrNull(selectedImage).orEmpty(),
-            contentDescription = product.name,
+            contentDescription = product.tenSanPham,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(300.dp)
@@ -131,7 +131,7 @@ fun ProductDetailScreen(
                 items(images) { image ->
                     ProductImage(
                         imageUrl = image,
-                        contentDescription = product.name,
+                        contentDescription = product.tenSanPham,
                         modifier = Modifier
                             .size(64.dp)
                             .clip(RoundedCornerShape(6.dp))
@@ -146,7 +146,7 @@ fun ProductDetailScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = product.name,
+            text = product.tenSanPham,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = EcomerTextPrimary,
@@ -155,43 +155,28 @@ fun ProductDetailScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Loại sp: ${product.category}",
+            text = "Loại sp: ${product.loaiSanPham}",
             fontSize = 14.sp,
             color = EcomerTextMuted,
             lineHeight = 22.sp,
         )
         Text(
-            text = "Giá sp: ${formatPrice(product.price)}",
+            text = "Giá sp: ${formatPrice(product.gia)}",
             fontSize = 14.sp,
             color = EcomerTextMuted,
             lineHeight = 22.sp,
         )
-        Text(
-            text = "Còn lại: ${product.availableStock} sản phẩm",
-            fontSize = 14.sp,
-            color = if (product.availableStock > 0) EcomerTextMuted else EcomerDanger,
-            lineHeight = 22.sp,
-        )
-        if (product.description.isNotBlank()) {
-            Text(
-                text = product.description,
-                fontSize = 13.sp,
-                color = EcomerTextMuted,
-                lineHeight = 20.sp,
-            )
-        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
         // Hai hanh dong rieng: them vao gio, hoac mua ngay (thang qua man thanh toan).
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlineButton(
-                text = if (product.availableStock > 0) "THÊM VÀO GIỎ" else "HẾT HÀNG",
+                text = "THÊM VÀO GIỎ",
                 onClick = {
                     viewModel.addToCart(product)
                     onAddedToCart()
                 },
-                enabled = product.availableStock > 0,
                 modifier = Modifier.weight(1f),
                 heightDp = 48,
             )
@@ -201,7 +186,6 @@ fun ProductDetailScreen(
                     viewModel.addToCart(product)
                     onBuyNow()
                 },
-                enabled = product.availableStock > 0,
                 modifier = Modifier.weight(1f),
                 heightDp = 48,
             )

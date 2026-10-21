@@ -36,10 +36,10 @@ data class ShopUiState(
     val visibleProducts: List<Product>
         get() = products.filter { product ->
             val inCategory = selectedCategory.isEmpty() ||
-                    product.category == selectedCategory
+                    product.loaiSanPham == selectedCategory
             val inSearch = searchQuery.isBlank() ||
-                    product.name.contains(searchQuery, ignoreCase = true) ||
-                    product.category.contains(searchQuery, ignoreCase = true)
+                    product.tenSanPham.contains(searchQuery, ignoreCase = true) ||
+                    product.loaiSanPham.contains(searchQuery, ignoreCase = true)
             inCategory && inSearch
         }
 
@@ -48,11 +48,11 @@ data class ShopUiState(
 
     /** Anh dai dien cua san pham. */
     fun thumbnail(product: Product): String =
-        images[product.effectiveCoverId].orEmpty()
+        images[product.image].orEmpty()
 
     /** Tat ca anh cua san pham, theo thu tu. */
     fun imagesOf(product: Product): List<String> =
-        product.imageIds.mapNotNull { images[it] }
+        images.values.toList()
 }
 
 /**
@@ -113,7 +113,7 @@ class ShopViewModel(
                         state.copy(
                             products = list,
                             categories = listOf(com.ecomer.vku.app.data.repo.SampleData.CATEGORY_ALL) +
-                                    list.map { it.category }.distinct(),
+                                    list.map { it.loaiSanPham }.distinct(),
                         )
                     }
                     loadImages(list)
@@ -129,7 +129,7 @@ class ShopViewModel(
      * goi moi anh mot lan (N+1 request).
      */
     private suspend fun loadImages(products: List<Product>) {
-        val imageIds = products.flatMap { it.imageIds }.distinct()
+        val imageIds = products.map { it.image }.filter { it.isNotBlank() }.distinct()
         if (imageIds.isEmpty()) return
         val loaded = productRepository.loadImages(imageIds)
         _uiState.update { state ->
@@ -186,8 +186,8 @@ class ShopViewModel(
         } else {
             current + CartItem(
                 productId = product.id,
-                name = product.name,
-                price = product.price,
+                name = product.tenSanPham,
+                price = product.gia,
                 imageUrl = _uiState.value.thumbnail(product),
                 quantity = quantity,
             )
@@ -235,15 +235,6 @@ class ShopViewModel(
             return
         }
         viewModelScope.launch {
-            // Tru so luong con ban truoc: neu het hang thi khong tao don.
-            val stockError = items.firstOrNull { item ->
-                productRepository.reserveStock(item.productId, item.quantity).isFailure
-            }
-            if (stockError != null) {
-                _uiState.update { it.copy(message = "Sản phẩm không còn đủ hàng") }
-                return@launch
-            }
-
             orderRepository.placeOrder(uid, items)
                 .onSuccess {
                     cartRepository.clearCart(uid)

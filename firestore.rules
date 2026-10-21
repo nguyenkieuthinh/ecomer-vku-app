@@ -1,18 +1,29 @@
 rules_version = '2';
 
-// Security Rules cho app ECOMER.
+// ============================================================================
+// SECURITY RULES — APP ECOMER (theo đề thi)
 //
-// Cách dùng: Firebase Console -> Firestore Database -> Rules -> dán toàn bộ
-// nội dung file này -> Publish.
+// Cách dùng: Firebase Console → Firestore Database → Rules → dán toàn bộ
+// nội dung file này → Publish.
 //
-// Vai tro admin duoc xac dinh bang email (khop voi User.ADMIN_EMAILS trong
-// code). Rules dung `request.auth.token.email` nen nguoi dung KHONG the tu
-// sua role trong Firestore de len admin.
+// CSDL theo đề thi:
+//   products/{id}       : tenSanPham, loaiSanPham, gia, image
+//   product_images/{id} : productId, tieuDe, data (base64), tenFile, order
+//   hidden_products/{id}: san pham dang an (admin an, khach khong thay)
+//   counters/{slug}     : bo dem sinh id theo loai san pham
+//   carts/{uid}         : gio hang cua nguoi dung
+//   orders/{id}         : don hang
+//   users/{uid}         : ho so nguoi dung + phan quyen
+//   users/{uid}/addresses/{id} : dia chi giao hang
+//
+// VAI TRÒ ADMIN xác định bằng email trong token (request.auth.token.email),
+// khớp với User.ADMIN_EMAILS trong code.
+// ============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Admin ---
+    // ---------------------------------------------------------------- Admin
     function isAdmin() {
       return request.auth != null
         && request.auth.token.email in [
@@ -24,45 +35,37 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    // --- San pham ---
-    // Doc cho tat ca (khach chua dang nhap van xem duoc cua hang).
-    //
-    // Ghi: chi admin them / sua / xoa. Ngoai ra, KHACH da dang nhap duoc phep
-    // giam ton kho khi dat hang — chi cho doi `availableStock` va `soldCount`,
-    // khong duoc sua ten, gia hay anh. Ton kho chi duoc GIAM, so da ban chi duoc TANG.
+    // ------------------------------------------------------- Sản phẩm
+    // Ai cũng đọc được (khách chưa đăng nhập vẫn xem được cửa hàng).
+    // Chỉ admin thêm / sửa / xoá.
     match /products/{productId} {
       allow read: if true;
-
-      allow create, delete: if isAdmin();
-
-      allow update: if isAdmin()
-        || (request.auth != null
-            && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['availableStock', 'soldCount'])
-            && request.resource.data.availableStock
-               <= resource.data.availableStock
-            && request.resource.data.soldCount
-               >= resource.data.soldCount);
+      allow write: if isAdmin();
     }
 
-    // --- Anh san pham ---
-    // Moi anh mot document rieng, nen giới han 1 MiB ap dung cho tung anh.
+    // -------------------------------------------------------- Ảnh sản phẩm
+    // Mỗi ảnh một document riêng nên giới hạn 1 MiB áp dụng cho từng ảnh.
     match /product_images/{imageId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // --- Bo dem sinh id theo loai ---
-    // Chi admin duoc dung va sua.
+    // ------------------------------------------------- Sản phẩm đang ẩn
+    // Lưu riêng để document sản phẩm chỉ có đúng 4 trường như đề yêu cầu.
+    match /hidden_products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --------------------------------------------- Bộ đếm sinh id sản phẩm
     match /counters/{typeSlug} {
       allow read, write: if isAdmin();
     }
 
-    // --- Ho so nguoi dung ---
-    // Nguoi dung doc/sua ho so cua minh. Khong ai duoc tu dat role "admin":
-    // role moi phai giong role cu (neu doi role thi chi admin moi lam duoc).
-    // `role` trong Firestore chi de hien thi — quyen thuc su duoc quyet dinh
-    // bang email trong token (ham isAdmin o tren).
+    // ----------------------------------------------------- Hồ sơ người dùng
+    // Người dùng đọc/sửa hồ sơ của chính mình.
+    // KHÔNG ai tự đặt role "admin": role mới phải giống role cũ,
+    // riêng admin mới đổi được.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
 
@@ -76,21 +79,20 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // --- Dia chi giao hang ---
-    // Luu trong subcollection `users/{uid}/addresses` — moi nguoi chi quan ly
-    // duoc dia chi cua chinh minh.
+    // ----------------------------------------------------- Địa chỉ giao hàng
     match /users/{uid}/addresses/{addressId} {
       allow read, write: if isOwner(uid) || isAdmin();
     }
 
-    // --- Gio hang ---
-    // Document id chinh la uid, nen moi nguoi chi thay duoc gio hang cua minh.
+    // ------------------------------------------------------------ Giỏ hàng
+    // Document id chính là uid nên mỗi người chỉ thấy giỏ của mình.
     match /carts/{uid} {
       allow read, write: if isOwner(uid) || isAdmin();
     }
 
-    // --- Don hang ---
-    // Nguoi dung doc don cua minh, tao don moi bang chinh tai khoan dang nhap.
+    // ----------------------------------------------------------- Đơn hàng
+    // Người dùng đọc đơn của mình và tạo đơn mới bằng chính tài khoản đang
+    // đăng nhập. Admin thấy và đổi trạng thái được tất cả.
     match /orders/{orderId} {
       allow read: if isAdmin()
         || (request.auth != null && resource.data.userId == request.auth.uid);

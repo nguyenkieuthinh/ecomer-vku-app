@@ -19,7 +19,7 @@ import kotlinx.coroutines.withContext
  */
 data class EncodedImage(
     val data: String = "",
-    val fileName: String = "",
+    val tenFile: String = "",
     val sizeBytes: Long = 0,
 )
 
@@ -70,7 +70,7 @@ object ImageEncoder {
                         compressed,
                         android.util.Base64.NO_WRAP,
                     ),
-                    fileName = displayName(uri),
+                    tenFile = displayName(uri),
                     sizeBytes = compressed.size.toLong(),
                 )
             }.onFailure { Log.e(TAG, "Không mã hóa được ảnh", it) }

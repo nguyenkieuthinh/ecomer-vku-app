@@ -32,17 +32,8 @@ data class AdminDashboardUiState(
     val pendingCount: Int
         get() = orders.count { it.status == Order.STATUS_PENDING }
 
-    /** San pham het hang hoac sap het. */
-    val lowStockProducts: List<Product>
-        get() = products.filter { it.availableStock <= LOW_STOCK_THRESHOLD }
-            .sortedBy { it.availableStock }
-
-    /** So san pham ban het trong kho. */
-    val soldCount: Int get() = products.sumOf { it.soldCount }
-
-    companion object {
-        const val LOW_STOCK_THRESHOLD = 5
-    }
+    /** So san pham dang an (khong hien voi khach). */
+    val hiddenCount: Int get() = products.count { !it.visible }
 }
 
 /**

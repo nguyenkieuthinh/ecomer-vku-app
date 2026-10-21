@@ -1,0 +1,107 @@
+rules_version = '2';
+
+// ============================================================================
+// SECURITY RULES — APP ECOMER (theo đề thi)
+//
+// Cách dùng: Firebase Console → Firestore Database → Rules → dán toàn bộ
+// nội dung file này → Publish.
+//
+// CSDL theo đề thi:
+//   products/{id}       : tenSanPham, loaiSanPham, gia, image
+//   product_images/{id} : productId, tieuDe, data (base64), tenFile, order
+//   hidden_products/{id}: san pham dang an (admin an, khach khong thay)
+//   counters/{slug}     : bo dem sinh id theo loai san pham
+//   carts/{uid}         : gio hang cua nguoi dung
+//   orders/{id}         : don hang
+//   users/{uid}         : ho so nguoi dung + phan quyen
+//   users/{uid}/addresses/{id} : dia chi giao hang
+//
+// VAI TRÒ ADMIN xác định bằng email trong token (request.auth.token.email),
+// khớp với User.ADMIN_EMAILS trong code.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- Admin
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email in [
+          'admin@ecomer.vn'
+        ];
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // ------------------------------------------------------- Sản phẩm
+    // Ai cũng đọc được (khách chưa đăng nhập vẫn xem được cửa hàng).
+    // Chỉ admin thêm / sửa / xoá.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // -------------------------------------------------------- Ảnh sản phẩm
+    // Mỗi ảnh một document riêng nên giới hạn 1 MiB áp dụng cho từng ảnh.
+    match /product_images/{imageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ------------------------------------------------- Sản phẩm đang ẩn
+    // Lưu riêng để document sản phẩm chỉ có đúng 4 trường như đề yêu cầu.
+    match /hidden_products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --------------------------------------------- Bộ đếm sinh id sản phẩm
+    match /counters/{typeSlug} {
+      allow read, write: if isAdmin();
+    }
+
+    // ----------------------------------------------------- Hồ sơ người dùng
+    // Người dùng đọc/sửa hồ sơ của chính mình.
+    // KHÔNG ai tự đặt role "admin": role mới phải giống role cũ,
+    // riêng admin mới đổi được.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+
+      allow create: if isOwner(uid)
+        && request.resource.data.role == 'user';
+
+      allow update: if isAdmin()
+        || (isOwner(uid)
+          && request.resource.data.role == resource.data.role);
+
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------- Địa chỉ giao hàng
+    match /users/{uid}/addresses/{addressId} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    // ------------------------------------------------------------ Giỏ hàng
+    // Document id chính là uid nên mỗi người chỉ thấy giỏ của mình.
+    match /carts/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    // ----------------------------------------------------------- Đơn hàng
+    // Người dùng đọc đơn của mình và tạo đơn mới bằng chính tài khoản đang
+    // đăng nhập. Admin thấy và đổi trạng thái được tất cả.
+    match /orders/{orderId} {
+      allow read: if isAdmin()
+        || (request.auth != null && resource.data.userId == request.auth.uid);
+
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

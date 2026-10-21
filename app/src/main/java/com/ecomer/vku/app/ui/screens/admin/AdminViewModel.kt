@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 data class AdminImage(
     val id: String = "",
     val data: String = "",
-    val fileName: String = "",
+    val tenFile: String = "",
     val sizeBytes: Long = 0,
     val isNew: Boolean = false,
 )
@@ -46,8 +46,6 @@ data class AdminUiState(
     val name: String = "",
     val category: String = "",
     val price: String = "",
-    val stock: String = "",
-    val description: String = "",
     val images: List<AdminImage> = emptyList(),
     val editing: Product? = null,
     val loading: Boolean = false,
@@ -69,7 +67,7 @@ data class AdminUiState(
     val imageCount: Int get() = images.size
 
     /** Anh dai dien cua mot san pham trong danh sach. */
-    fun thumbnail(product: Product): String = thumbnails[product.effectiveCoverId].orEmpty()
+    fun thumbnail(product: Product): String = thumbnails[product.image].orEmpty()
 }
 
 /**
@@ -95,7 +93,7 @@ class AdminViewModel(
                     state.copy(
                         products = list,
                         categories = listOf(SampleData.CATEGORY_ALL) +
-                                list.map { it.category }.distinct().filter { it.isNotBlank() },
+                                list.map { it.loaiSanPham }.distinct().filter { it.isNotBlank() },
                     )
                 }
                 loadThumbnails(list)
@@ -110,7 +108,7 @@ class AdminViewModel(
      * cho tat ca san pham thay vi goi tung anh mot lan.
      */
     private suspend fun loadThumbnails(products: List<Product>) {
-        val imageIds = products.map { it.effectiveCoverId }.filter { it.isNotBlank() }.distinct()
+        val imageIds = products.map { it.image }.filter { it.isNotBlank() }.distinct()
         if (imageIds.isEmpty()) return
         val loaded = productRepository.loadImages(imageIds)
         _uiState.update { state ->
@@ -127,11 +125,7 @@ class AdminViewModel(
     /** Cap nhat gia san pham trong form. */
     fun setPrice(value: String) = _uiState.update { it.copy(price = value.filter { it.isDigit() }) }
 
-    /** Cap nhat so luong ton kho trong form. */
-    fun setStock(value: String) = _uiState.update { it.copy(stock = value.filter { it.isDigit() }) }
 
-    /** Cap nhat mo ta san pham trong form. */
-    fun setDescription(value: String) = _uiState.update { it.copy(description = value) }
 
     /**
      * Chon nhieu anh tu thu vien.
@@ -154,8 +148,7 @@ class AdminViewModel(
                 val added = encoded.map {
                     AdminImage(
                         data = it.data,
-                        fileName = it.fileName,
-                        sizeBytes = it.sizeBytes,
+                        tenFile = it.tenFile,
                         isNew = true,
                     )
                 }
@@ -204,24 +197,21 @@ class AdminViewModel(
     /** Bat dau sua mot san pham kem tai anh cu cua no. */
     fun startEdit(product: Product) {
         viewModelScope.launch {
-            val loaded = productRepository.loadImages(product.imageIds)
+            val loaded = productRepository.loadImages(listOf(product.image))
             val images = loaded.map {
                 AdminImage(
                     id = it.id,
                     data = it.data,
-                    fileName = it.fileName,
-                    sizeBytes = it.sizeBytes,
+                    tenFile = it.tenFile,
                     isNew = false,
                 )
             }
             _uiState.update { state ->
                 state.copy(
                     editing = product,
-                    name = product.name,
-                    category = product.category,
-                    price = product.price.toString(),
-                    stock = product.totalStock.toString(),
-                    description = product.description,
+                    name = product.tenSanPham,
+                    category = product.loaiSanPham,
+                    price = product.gia.toString(),
                     images = images,
                 )
             }
@@ -236,8 +226,6 @@ class AdminViewModel(
                 name = "",
                 category = "",
                 price = "",
-                stock = "",
-                description = "",
                 images = emptyList(),
             )
         }
@@ -259,33 +247,31 @@ class AdminViewModel(
             _uiState.update { it.copy(message = "Giá sản phẩm không hợp lệ") }
             return
         }
-        val stock = state.stock.toIntOrNull() ?: 0
 
         _uiState.update { it.copy(loading = true, message = null) }
         viewModelScope.launch {
             val editing = state.editing
             val product = Product(
                 id = editing?.id.orEmpty(),
-                name = state.name,
-                category = state.category,
-                price = price,
-                totalStock = stock,
-                availableStock = stock,
-                soldCount = editing?.soldCount ?: 0,
-                description = state.description,
-                imageIds = editing?.imageIds ?: emptyList(),
+                tenSanPham = state.name,
+                loaiSanPham = state.category,
+                gia = price,
+                image = editing?.image.orEmpty(),
             )
 
             // Anh moi chua luu -> them. Anh cu bi lo -> xoa.
             val newImages = state.images.filter { it.isNew }.map {
-                EncodedImage(it.data, it.fileName, it.sizeBytes)
+                EncodedImage(it.data, it.tenFile, it.sizeBytes)
             }
             // Anh cu con lai, theo thu tu hien thi (dau tien la anh dai dien).
             val keptIds = state.images.filterNot { it.isNew }.map { it.id }
+            // Anh cu cua san pham dang sua ma KHONG con trong danh sach
+            // (da bi xoa o form) -> se bi xoa khoi Firestore.
             val removedIds = if (editing == null) {
                 emptyList()
             } else {
-                editing.imageIds.filter { id -> id !in keptIds }
+                val currentIds = productRepository.loadImages(listOf(editing.image)).map { it.id }
+                currentIds.filter { id -> id !in keptIds }
             }
 
             val result = if (editing == null) {
@@ -307,8 +293,6 @@ class AdminViewModel(
                                 name = "",
                                 category = "",
                                 price = "",
-                                stock = "",
-                                description = "",
                                 images = emptyList(),
                                             )
                         }

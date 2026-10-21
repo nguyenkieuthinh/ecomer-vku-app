@@ -166,30 +166,11 @@ fun AdminProductsScreen(
             heightDp = 42,
             keyboardType = KeyboardType.Number,
             modifier = Modifier.focusRequester(priceFocus),
-            imeAction = ImeAction.Next,
-            onNext = { stockFocus.requestFocus() },
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        EcomerField(
-            value = state.stock,
-            onValueChange = viewModel::setStock,
-            placeholder = "Số lượng tồn kho",
-            heightDp = 42,
-            keyboardType = KeyboardType.Number,
-            modifier = Modifier.focusRequester(stockFocus),
-            imeAction = ImeAction.Next,
-            onNext = { descriptionFocus.requestFocus() },
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        EcomerField(
-            value = state.description,
-            onValueChange = viewModel::setDescription,
-            placeholder = "Mô tả sản phẩm",
-            heightDp = 42,
-            modifier = Modifier.focusRequester(descriptionFocus),
             imeAction = ImeAction.Done,
             onNext = { viewModel.save() },
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -309,6 +290,9 @@ fun AdminProductsScreen(
                     onEdit = { viewModel.startEdit(product) },
                     onDelete = { viewModel.delete(product) },
                     onView = { onViewProduct(product) },
+                    onToggleVisibility = {
+                        viewModel.setVisibility(product, !product.visible)
+                    },
                 )
             }
         }
@@ -329,7 +313,7 @@ private fun AdminImageThumb(
     Box(modifier = modifier.size(96.dp)) {
         ProductImage(
             imageUrl = image.data,
-            contentDescription = image.fileName,
+            contentDescription = image.tenFile,
             modifier = Modifier
                 .fillMaxSize()
                 .clip(RoundedCornerShape(6.dp))
@@ -382,7 +366,7 @@ private fun AdminImageThumb(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = image.fileName.ifBlank { "ảnh" },
+                text = image.tenFile.ifBlank { "ảnh" },
                 color = Color.White,
                 fontSize = 9.sp,
                 maxLines = 1,
@@ -408,6 +392,7 @@ fun AdminProductRow(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onView: () -> Unit,
+    onToggleVisibility: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -422,34 +407,47 @@ fun AdminProductRow(
     ) {
         ProductImage(
             imageUrl = imageUrl,
-            contentDescription = product.name,
+            contentDescription = product.tenSanPham,
             modifier = Modifier.size(64.dp),
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Tên sp: ${product.tenSanPham}",
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = EcomerTextPrimary,
+                )
+                // San pham da an khong hien voi khach.
+                if (!product.visible) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFFFDECEA))
+                            .padding(horizontal = 5.dp, vertical = 1.dp),
+                    ) {
+                        Text(
+                            text = "Đã ẩn",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = EcomerDanger,
+                        )
+                    }
+                }
+            }
             Text(
-                text = "Tên sp: ${product.name}",
+                text = "Giá sp: ${product.gia}",
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
                 color = EcomerTextPrimary,
             )
             Text(
-                text = "Giá sp: ${product.price}",
+                text = "Loại sp: ${product.loaiSanPham}",
                 fontSize = 13.sp,
                 lineHeight = 20.sp,
                 color = EcomerTextPrimary,
-            )
-            Text(
-                text = "Loại sp: ${product.category}",
-                fontSize = 13.sp,
-                lineHeight = 20.sp,
-                color = EcomerTextPrimary,
-            )
-            Text(
-                text = "Còn: ${product.availableStock}/${product.totalStock} · Đã bán: ${product.soldCount}",
-                fontSize = 12.sp,
-                lineHeight = 18.sp,
-                color = EcomerTextMuted,
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
@@ -465,6 +463,13 @@ fun AdminProductRow(
                 textColor = EcomerDanger,
                 borderColor = EcomerDanger,
                 onClick = onDelete,
+            )
+            // Bat / tat hien san pham trong cua hang.
+            SmallActionButton(
+                text = if (product.visible) "Ẩn" else "HIỆN",
+                textColor = if (product.visible) EcomerWarning else EcomerPrimary,
+                borderColor = if (product.visible) EcomerWarning else EcomerPrimary,
+                onClick = onToggleVisibility,
             )
         }
     }

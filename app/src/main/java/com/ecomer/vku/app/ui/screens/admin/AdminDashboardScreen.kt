@@ -151,7 +151,7 @@ fun AdminDashboardScreen(
                 AdminMenuRow(
                     icon = Icons.Filled.Inventory2,
                     title = "Quản lý sản phẩm",
-                    subtitle = "${state.products.size} sản phẩm · ${state.soldCount} đã bán",
+                    subtitle = "${state.products.size} sản phẩm · ${state.products.size} sản phẩm",
                     onClick = onManageProducts,
                 )
             }
@@ -176,52 +176,6 @@ fun AdminDashboardScreen(
                 )
             }
 
-            // San pham sap het hang
-            if (state.lowStockProducts.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Sắp hết hàng",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = EcomerTextMuted,
-                    )
-                }
-                items(state.lowStockProducts, key = { it.id }) { product ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White)
-                            .border(1.dp, EcomerBorder, RoundedCornerShape(10.dp))
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = product.name,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = EcomerTextPrimary,
-                            )
-                            Text(
-                                text = "Còn ${product.availableStock}/${product.totalStock}",
-                                fontSize = 12.sp,
-                                color = if (product.availableStock == 0) {
-                                    Color(0xFFB3262D)
-                                } else {
-                                    EcomerTextMuted
-                                },
-                            )
-                        }
-                        Text(
-                            text = formatPrice(product.price),
-                            fontSize = 13.sp,
-                            color = EcomerTextMuted,
-                        )
-                    }
-                }
-            }
 
             // Nguoi dang nhap gan nhat
             if (state.users.isNotEmpty()) {

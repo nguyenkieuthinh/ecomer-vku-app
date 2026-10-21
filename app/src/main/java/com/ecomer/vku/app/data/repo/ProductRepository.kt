@@ -8,16 +8,18 @@ import com.ecomer.vku.app.data.model.ProductImage
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.tasks.await
 
 /**
  * Repository cho san pham va anh san pham.
  *
- * Cau truc Firestore:
- * - `products/{id}`: thong tin san pham + `imageIds` (danh sach id anh).
- * - `product_images/{id}`: mot anh, luu base64. Tach rieng de moi anh co
- *   1 MiB rieng — san pham bao nhieu anh cung khong vuot gioi han.
+ * Cau truc Firestore (theo de thi):
+ * - `products/{id}`: CHI co 4 truong — `tenSanPham`, `loaiSanPham`, `gia`,
+ *   `image` (id cua document anh dai dien).
+ * - `product_images/{id}`: mot anh, luu base64. Tach rieng nen gioi han 1 MiB
+ *   ap dung cho TUNG anh, san pham bao nhieu anh cung khong vuot.
+ * - `hidden_products/{productId}`: san pham dang an. Luu o collection rieng
+ *   de KHONG them truong "visible" vao document san pham.
  * - `counters/{typeSlug}`: bo dem sinh id theo loai san pham.
  */
 class ProductRepository(
@@ -25,19 +27,11 @@ class ProductRepository(
 ) {
 
     /**
-     * Theo doi danh sach san pham — dung LIVE LISTENER.
+     * Theo doi danh sach san pham — dung LIVE LISTENER de danh sach tu cap nhat
+     * khi admin them / sua / xoa.
      *
-     * Listener cho phep danh sach cap nhat ngay khi admin them / sua / xoa san
-     * pham, khong can goi lai [loadProducts] theo tay. Neu dung `get()` (doc
-     * mot lan) thi danh sach se khong bao gio tu doi.
-     *
-     * Khong dung `orderBy("createdAt")`: Firestore loai bo nhung document
-     * KHONG co field do, nen san pham tao truoc khi co `createdAt` se khong
-     * bao gio xuat hien. Thay vao do sap xep o phia app.
-     *
-     * Loi Firestore (database chua duoc tao, khong co mang, bi tu choi) duoc bat
-     * lai va dua ve danh sach mau — neu khong, exception se lan ra [flow] va lam
-     * app crash ngay khi mo.
+     * @param onlyVisible true = chi lay san pham dang ban (dung cho khach).
+     *   false = lay tat ca, giu san pham da an (dung cho admin).
      */
     fun observeProducts(onlyVisible: Boolean = true): Flow<List<Product>> = callbackFlow {
         val db = firestore
@@ -46,41 +40,63 @@ class ProductRepository(
             return@callbackFlow
         }
 
-        val registration = db.collection(ProductImage.PRODUCT_COLLECTION)
+        var hiddenIds: Set<String> = emptySet()
+        var products: List<Product> = emptyList()
+
+        val hiddenRegistration = db.collection(ProductImage.HIDDEN_COLLECTION)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    FirebaseExt.reportFailure(error)
+                    return@addSnapshotListener
+                }
+                hiddenIds = snapshot?.documents?.map { it.id }?.toSet() ?: emptySet()
+                emitFiltered(products, hiddenIds, onlyVisible)
+            }
+
+        val productRegistration = db.collection(ProductImage.PRODUCT_COLLECTION)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     FirebaseExt.reportFailure(error)
                     trySend(SampleData.products)
                     return@addSnapshotListener
                 }
-                val list = snapshot?.documents
-                    ?.map { it.toProduct() }
-                    ?.filter { !onlyVisible || it.visible }
-                    ?: emptyList()
-                // Moi san pham len dau — san pham moi them la thu nguoi dung
-                // dang xem.
-                val sorted = list.sortedByDescending { it.createdAt }
-                trySend(sorted.ifEmpty { SampleData.products })
+                products = snapshot?.documents?.map { it.toProduct() } ?: emptyList()
+                emitFiltered(products, hiddenIds, onlyVisible)
             }
 
-        awaitClose { registration.remove() }
+        awaitClose {
+            hiddenRegistration.remove()
+            productRegistration.remove()
+        }
     }
 
     /**
-     * Doc anh cua nhieu san pham mot luc.
+     * Loc va gui danh sach san pham theo trang thai an/hien.
      *
-     * Dung [FirebaseFirestore.getAll] de gom het len mot lan round-trip thay vi
-     * goi tung anh — tranh N+1 request khi luoi hien nhieu san pham.
+     * `visible` duoc gan o day (chi trong RAM) — document san pham tren
+     * Firestore van chi co 4 truong.
+     */
+    private fun kotlinx.coroutines.channels.SendChannel<List<Product>>.emitFiltered(
+        products: List<Product>,
+        hiddenIds: Set<String>,
+        onlyVisible: Boolean,
+    ) {
+        val marked = products.map { it.copy(visible = it.id !in hiddenIds) }
+        val visible = marked.filter { !onlyVisible || it.visible }
+        trySend(visible.ifEmpty { SampleData.products })
+    }
+
+    /**
+     * Doc anh cua nhieu san pham mot luc theo id document.
      *
-     * @param imageIds danh sach id can doc.
-     * @return anh theo dung thu tu truyen vao.
+     * Dung `whereIn` theo id (chia lo 30) de gom het len mot lan round-trip
+     * thay vi goi tung anh mot lan.
      */
     suspend fun loadImages(imageIds: List<String>): List<ProductImage> {
         val db = firestore ?: return emptyList()
         if (imageIds.isEmpty()) return emptyList()
 
         val loaded = runCatching {
-            // Firestore gioi han 30 gia tri cho moi `whereIn`, nen chia lo.
             imageIds.distinct().chunked(MAX_WHERE_IN).flatMap { chunk ->
                 db.collection(ProductImage.COLLECTION)
                     .whereIn(com.google.firebase.firestore.FieldPath.documentId(), chunk)
@@ -91,9 +107,33 @@ class ProductRepository(
             }
         }.getOrElse { emptyList() }
 
-        // Tra ve theo dung thu tu id nguoi goi yeu cau.
         val byId = loaded.associateBy { it.id }
         return imageIds.mapNotNull { byId[it] }
+    }
+
+    /**
+     * Theo doi TAT CA anh cua mot san pham, theo thu tu hien thi.
+     * Dung o man chi tiet san pham de xem / vuot qua cac anh.
+     */
+    fun observeImagesOf(productId: String): Flow<List<ProductImage>> = callbackFlow {
+        val db = firestore
+        if (db == null) {
+            trySend(emptyList())
+            return@callbackFlow
+        }
+        val registration = db.collection(ProductImage.COLLECTION)
+            .whereEqualTo("productId", productId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val list = snapshot?.documents?.map { it.toProductImage() }
+                    ?.sortedBy { it.order }
+                    ?: emptyList()
+                trySend(list)
+            }
+        awaitClose { registration.remove() }
     }
 
     /**
@@ -119,22 +159,24 @@ class ProductRepository(
     /**
      * Them san pham moi kem danh sach anh (base64).
      *
+     * Document san pham chi ghi 4 truong: tenSanPham, loaiSanPham, gia, image.
+     *
      * @param product thong tin san pham.
-     * @param images du lieu base64 cua cac anh. Anh DAU TIEN la anh dai dien.
+     * @param images du lieu base64 cua cac anh, theo thu tu hien thi.
      * @return id cua san pham vua tao.
      */
     suspend fun addProduct(product: Product, images: List<EncodedImage>): Result<String> = runCatching {
         val db = requireNotNull(firestore) { "Firebase chưa được cấu hình" }
-        val productId = nextProductId(db, product.category)
+        val productId = nextProductId(db, product.loaiSanPham)
 
         val imageIds = images.mapIndexed { index, image ->
-            val imageId = "$productId-img-${index + 1}"
+            val imageId = "$productId-${index + 1}"
             db.collection(ProductImage.COLLECTION).document(imageId).set(
                 mapOf(
                     "productId" to productId,
+                    "tieuDe" to product.tenSanPham.trim(),
                     "data" to image.data,
-                    "fileName" to image.fileName,
-                    "sizeBytes" to image.sizeBytes,
+                    "tenFile" to image.tenFile,
                     "order" to index,
                     "createdAt" to com.google.firebase.Timestamp.now(),
                 )
@@ -142,20 +184,12 @@ class ProductRepository(
             imageId
         }
 
-        val doc = db.collection(ProductImage.PRODUCT_COLLECTION).document(productId)
-        doc.set(
+        db.collection(ProductImage.PRODUCT_COLLECTION).document(productId).set(
             mapOf(
-                "name" to product.name.trim(),
-                "category" to product.category.trim(),
-                "price" to product.price,
-                "totalStock" to product.totalStock,
-                "availableStock" to product.availableStock,
-                "soldCount" to 0,
-                "description" to product.description.trim(),
-                "imageIds" to imageIds,
-                "coverImageId" to imageIds.firstOrNull().orEmpty(),
-                "visible" to product.visible,
-                "createdAt" to com.google.firebase.Timestamp.now(),
+                "tenSanPham" to product.tenSanPham.trim(),
+                "loaiSanPham" to product.loaiSanPham.trim(),
+                "gia" to product.gia,
+                "image" to imageIds.firstOrNull().orEmpty(),
             )
         ).await()
         productId
@@ -164,10 +198,8 @@ class ProductRepository(
     /**
      * Cap nhat san pham.
      *
-     * - `keptImageIds` la danh sach id anh giu lai, THEO THU TU HIEN THI.
-     *   Anh dau tien la anh dai dien.
-     * - `newImages` la cac anh moi, them vao cuoi danh sach.
-     * - `removedImageIds` la cac anh bi xoa khoi Firestore.
+     * Document san pham van chi ghi 4 truong — `image` tro toi anh moi nhat
+     * (hoac anh cu neu khong co anh moi).
      */
     suspend fun updateProduct(
         product: Product,
@@ -176,17 +208,15 @@ class ProductRepository(
         removedImageIds: List<String> = emptyList(),
     ): Result<Unit> = runCatching {
         val db = requireNotNull(firestore) { "Firebase chưa được cấu hình" }
-        val productRef = db.collection(ProductImage.PRODUCT_COLLECTION).document(product.id)
 
-        // Xoa anh bi lo bo khoi Firestore.
+        // Xoa anh bi lo bo.
         removedImageIds.forEach { imageId ->
             runCatching {
                 db.collection(ProductImage.COLLECTION).document(imageId).delete().await()
             }
         }
 
-        // Cap nhat thu tu cua anh con lai (anh dai dien len dau).
-        // `update` chu khong phai `set` — `set` se xoa mat du lieu base64 cua anh.
+        // Cap nhat thu tu cua anh con lai.
         keptImageIds.forEachIndexed { index, imageId ->
             runCatching {
                 db.collection(ProductImage.COLLECTION).document(imageId)
@@ -197,13 +227,13 @@ class ProductRepository(
 
         // Them anh moi vao cuoi danh sach.
         val addedIds = newImages.mapIndexed { index, image ->
-            val imageId = "${product.id}-img-${keptImageIds.size + index + 1}"
+            val imageId = "${product.id}-${keptImageIds.size + index + 1}"
             db.collection(ProductImage.COLLECTION).document(imageId).set(
                 mapOf(
                     "productId" to product.id,
+                    "tieuDe" to product.tenSanPham.trim(),
                     "data" to image.data,
-                    "fileName" to image.fileName,
-                    "sizeBytes" to image.sizeBytes,
+                    "tenFile" to image.tenFile,
                     "order" to keptImageIds.size + index,
                     "createdAt" to com.google.firebase.Timestamp.now(),
                 )
@@ -212,42 +242,13 @@ class ProductRepository(
         }
 
         val finalIds = keptImageIds + addedIds
-        // Dung `update` de giu nguyen field "createdAt" va "soldCount" —
-        // `set` se ghi de toan bo document va lam mat cac field do.
-        productRef.update(
+        // `update` chu khong phai `set` — `set` se ghi de toan bo document.
+        db.collection(ProductImage.PRODUCT_COLLECTION).document(product.id).update(
             mapOf(
-                "name" to product.name.trim(),
-                "category" to product.category.trim(),
-                "price" to product.price,
-                "totalStock" to product.totalStock,
-                "availableStock" to product.availableStock,
-                "description" to product.description.trim(),
-                "imageIds" to finalIds,
-                "coverImageId" to finalIds.firstOrNull().orEmpty(),
-                "visible" to product.visible,
-            )
-        ).await()
-    }
-
-    /**
-     * Xoa mot anh cua san pham.
-     *
-     * @param productId id san pham.
-     * @param imageId id anh can xoa.
-     */
-    suspend fun deleteImage(productId: String, imageId: String): Result<Unit> = runCatching {
-        val db = requireNotNull(firestore) { "Firebase chưa được cấu hình" }
-        db.collection(ProductImage.COLLECTION).document(imageId).delete().await()
-
-        val productRef = db.collection(ProductImage.PRODUCT_COLLECTION).document(productId)
-        val snapshot = productRef.get().await()
-        val ids = snapshot.get("imageIds") as? List<String> ?: emptyList()
-        val remaining = ids.filterNot { it == imageId }
-        // `update` chu khong phai `set` — `set` se xoa mat ten, gia, anh cua san pham.
-        productRef.update(
-            mapOf(
-                "imageIds" to remaining,
-                "coverImageId" to remaining.firstOrNull().orEmpty(),
+                "tenSanPham" to product.tenSanPham.trim(),
+                "loaiSanPham" to product.loaiSanPham.trim(),
+                "gia" to product.gia,
+                "image" to finalIds.firstOrNull().orEmpty(),
             )
         ).await()
     }
@@ -256,89 +257,58 @@ class ProductRepository(
     suspend fun deleteProduct(id: String): Result<Unit> = runCatching {
         val db = requireNotNull(firestore) { "Firebase chưa được cấu hình" }
         val productRef = db.collection(ProductImage.PRODUCT_COLLECTION).document(id)
-        val imageIds = productRef.get().await().get("imageIds") as? List<String> ?: emptyList()
+        val snapshot = productRef.get().await()
+        val imageId = snapshot.getString("image").orEmpty()
 
-        imageIds.forEach { imageId ->
-            runCatching {
-                db.collection(ProductImage.COLLECTION).document(imageId).delete().await()
-            }
+        runCatching {
+            db.collection(ProductImage.COLLECTION).document(imageId).delete().await()
+        }
+        runCatching {
+            db.collection(ProductImage.HIDDEN_COLLECTION).document(id).delete().await()
         }
         productRef.delete().await()
     }
 
     /**
-     * Tru so luong con ban khi dat hang.
-     *
-     * Dung transaction de hai nguoi mua cung luc khong bao gio mua het hang.
-     *
-     * PHAI dung `update` chu khong phai `set` — `set` ghi de toan bo document,
-     * se xoa mat ten, gia va anh cua san pham. `update` chi ghi hai field
-     * ton kho, dung voi Security Rules (chi cho doi availableStock/soldCount).
-     */
-    suspend fun reserveStock(productId: String, quantity: Int): Result<Unit> = runCatching {
-        val db = requireNotNull(firestore) { "Firebase chưa được cấu hình" }
-        val ref = db.collection(ProductImage.PRODUCT_COLLECTION).document(productId)
-        db.runTransaction { transaction ->
-            val snapshot = transaction.get(ref)
-            val available = (snapshot.get("availableStock") as? Number)?.toInt() ?: 0
-            val sold = (snapshot.get("soldCount") as? Number)?.toInt() ?: 0
-            check(available >= quantity) { "Sản phẩm không còn đủ hàng" }
-            transaction.update(
-                ref,
-                mapOf(
-                    "availableStock" to available - quantity,
-                    "soldCount" to sold + quantity,
-                )
-            )
-        }.await()
-    }
-
-    /**
      * Bat hoac tat hien san pham.
      *
-     * San pham da AN khong hien voi khach, nhung admin van thay va bat lai duoc.
+     * Luu o collection `hidden_products` rieng — KHONG them truong vao document
+     * san pham (de thi yeu cau chi 4 truong).
      */
     suspend fun setVisibility(productId: String, visible: Boolean): Result<Unit> = runCatching {
         val db = requireNotNull(firestore) { "Firebase chưa được cấu hình" }
-        db.collection(ProductImage.PRODUCT_COLLECTION).document(productId)
-            .update(mapOf("visible" to visible))
-            .await()
+        val ref = db.collection(ProductImage.HIDDEN_COLLECTION).document(productId)
+        if (visible) {
+            ref.delete().await()
+        } else {
+            ref.set(mapOf("hiddenAt" to com.google.firebase.Timestamp.now())).await()
+        }
     }
 
     /** Loc san pham theo danh muc; "Tất cả" hien thi toan bo. */
     fun filterByCategory(products: List<Product>, category: String): List<Product> =
         if (category == SampleData.CATEGORY_ALL) products
-        else products.filter { it.category == category }
+        else products.filter { it.loaiSanPham == category }
 
     private fun com.google.firebase.firestore.DocumentSnapshot.toProduct() = Product(
         id = id,
-        name = getString("name").orEmpty(),
-        category = getString("category").orEmpty(),
-        price = when (val v = get("price")) {
+        tenSanPham = getString("tenSanPham").orEmpty(),
+        loaiSanPham = getString("loaiSanPham").orEmpty(),
+        gia = when (val v = get("gia")) {
             is Number -> v.toLong()
             is String -> v.toLongOrNull() ?: 0L
             else -> 0L
         },
-        totalStock = (get("totalStock") as? Number)?.toInt() ?: 0,
-        availableStock = (get("availableStock") as? Number)?.toInt() ?: 0,
-        soldCount = (get("soldCount") as? Number)?.toInt() ?: 0,
-        description = getString("description").orEmpty(),
-        imageIds = (get("imageIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
-        coverImageId = getString("coverImageId").orEmpty(),
-        createdAt = (get("createdAt") as? com.google.firebase.Timestamp)?.toDate()?.time
-            ?: (get("createdAt") as? Number)?.toLong() ?: 0L,
-        // San pham cu khong co field "visible" (tao truoc khi co tinh nang an)
-        // duoc coi la dang ban.
-        visible = get("visible") as? Boolean ?: true,
+        image = getString("image").orEmpty(),
     )
 
     private fun com.google.firebase.firestore.DocumentSnapshot.toProductImage() = ProductImage(
         id = id,
         productId = getString("productId").orEmpty(),
+        tieuDe = getString("tieuDe").orEmpty(),
         data = getString("data").orEmpty(),
+        tenFile = getString("tenFile").orEmpty(),
         order = (get("order") as? Number)?.toInt() ?: 0,
-        fileName = getString("fileName").orEmpty(),
-        sizeBytes = (get("sizeBytes") as? Number)?.toLong() ?: 0L,
     )
 
     companion object {

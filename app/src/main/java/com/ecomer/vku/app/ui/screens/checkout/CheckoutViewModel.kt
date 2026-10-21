@@ -129,17 +129,6 @@ class CheckoutViewModel(
 
         _uiState.update { it.copy(loading = true, message = null) }
         viewModelScope.launch {
-            // Tru ton kho truoc — neu het hang thi khong tao don.
-            val outOfStock = state.items.firstOrNull { item ->
-                productRepository.reserveStock(item.productId, item.quantity).isFailure
-            }
-            if (outOfStock != null) {
-                _uiState.update {
-                    it.copy(loading = false, message = "Sản phẩm không còn đủ hàng")
-                }
-                return@launch
-            }
-
             orderRepository.placeOrder(uid, state.items, address)
                 .onSuccess {
                     cartRepository.clearCart(uid)

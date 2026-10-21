@@ -3,66 +3,60 @@ package com.ecomer.vku.app.data.model
 /**
  * San pham trong cua hang.
  *
- * Anh duoc luu o collection rieng ("product_images"), moi anh mot document.
- * Ly do: gioi han 1 MiB cua Firestore ap dung cho TUNG document, nen san pham
- * co 2, 3 hay 4 anh deu khong anh huong nhau — moi anh duoc cap rieng 1 MiB.
- * Document san pham chi giu danh sach id anh de lien ket.
+ * Theo de thi, document san pham CHI co 4 truong: `tenSanPham`, `loaiSanPham`,
+ * `gia` va `image` (id cua document anh). Khong duoc them truong khac.
  *
- * @param id id cua document, sinh tu dong theo loai: "ao-nam-001".
- * @param name ten san pham.
- * @param category loai san pham ("Áo nam"), dung cho chip loc va sinh id.
- * @param price gia ban hien tai (VND).
- * @param totalStock tong so luong nhap kho.
- * @param availableStock so luong con ban.
- * @param soldCount so luong da ban.
- * @param description mo ta san pham.
- * @param imageIds danh sach id anh cua san pham nay, theo thu tu hien thi.
- * @param coverImageId id cua anh dai dien (thuong la anh dau tien).
- * @param createdAt thoi diem them san pham (milliseconds) — dung de sap xep.
- * @param visible san pham con ban hay da an. San pham da AN khong hien voi
- *   khach, nhung admin van thay va bat lai duoc.
+ * @param id id cua document trong Firestore (collection "products").
+ * @param tenSanPham ten san pham.
+ * @param loaiSanPham loai san pham, dung cho chip loc o man hinh Shop.
+ * @param gia gia ban (VND).
+ * @param image id cua document anh dai dien trong collection "product_images".
+ * @param visible san pham dang hien voi khach hay da bi admin an.
+ *   Truong nay CHI ton tai trong RAM — KHONG duoc ghi xuong Firestore.
+ *   Trang thai an duoc luu o collection rieng "hidden_products" de document
+ *   san pham van chi co 4 truong nhu de thi yeu cau.
  */
 data class Product(
     val id: String = "",
-    val name: String = "",
-    val category: String = "",
-    val price: Long = 0,
-    val totalStock: Int = 0,
-    val availableStock: Int = 0,
-    val soldCount: Int = 0,
-    val description: String = "",
-    val imageIds: List<String> = emptyList(),
-    val coverImageId: String = "",
-    val createdAt: Long = 0,
+    val tenSanPham: String = "",
+    val loaiSanPham: String = "",
+    val gia: Long = 0,
+    val image: String = "",
     val visible: Boolean = true,
-) {
-    /** Id cua anh dai dien, fallback ve anh dau tien. */
-    val effectiveCoverId: String
-        get() = coverImageId.ifEmpty { imageIds.firstOrNull().orEmpty() }
-}
+)
 
 /**
  * Mot anh san pham, luu rieng mot document trong collection "product_images".
  *
- * @param id id cua document, sinh tu dong theo loai san pham: "ao-nam-001-img-1".
+ * Anh duoc luu rieng nen gioi han 1 MiB cua Firestore ap dung cho TUNG anh —
+ * san pham bao nhieu anh cung khong vuot gioi han.
+ *
+ * @param id id cua document anh.
  * @param productId id cua san pham chua anh nay.
+ * @param tieuDe tieu de cua anh (trung ten san pham) — hinh anh duoc luu
+ *   va hien thi theo tung tieu de.
  * @param data duong dan base64 cua anh, kem tien to "data:image/jpeg;base64,".
+ * @param tenFile ten file goc cua anh.
  * @param order thu tu hien thi (0 la anh dau).
- * @param fileName ten file de hien thi tren UI.
- * @param sizeBytes dung luong cua anh sau khi nen (byte).
  */
 data class ProductImage(
     val id: String = "",
     val productId: String = "",
+    val tieuDe: String = "",
     val data: String = "",
+    val tenFile: String = "",
     val order: Int = 0,
-    val fileName: String = "",
-    val sizeBytes: Long = 0,
 ) {
     companion object {
         const val COLLECTION = "product_images"
         const val PRODUCT_COLLECTION = "products"
         const val COUNTER_COLLECTION = "counters"
+
+        /**
+         * San pham dang an — luu o collection rieng de KHONG them truong
+         * "visible" vao document san pham (de thi yeu cau chi 4 truong).
+         */
+        const val HIDDEN_COLLECTION = "hidden_products"
 
         /**
          * Chuyen "Áo nam" thanh "ao-nam" de dung lam id.
