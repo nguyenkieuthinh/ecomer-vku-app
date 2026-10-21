@@ -31,6 +31,11 @@ data class ShopUiState(
      * Anh duoc tach rieng thanh document trong Firestore nen phai tai theo id.
      */
     val images: Map<String, String> = emptyMap(),
+    /**
+     * Anh cua tung san pham: productId -> danh sach base64 theo thu tu.
+     * Dung o man chi tiet san pham de xem / vuot qua cac anh.
+     */
+    val imagesByProduct: Map<String, List<String>> = emptyMap(),
 ) {
     /** San pham sau khi loc theo danh muc va tim kiem. */
     val visibleProducts: List<Product>
@@ -50,9 +55,15 @@ data class ShopUiState(
     fun thumbnail(product: Product): String =
         images[product.image].orEmpty()
 
-    /** Tat ca anh cua san pham, theo thu tu. */
+    /**
+     * Tat ca anh cua MOT san pham, theo thu tu.
+     *
+     * Chi lay anh cua san pham do — lay tat ca se lam man chi tiet hien anh
+     * cua nhung san pham khac.
+     */
     fun imagesOf(product: Product): List<String> =
-        images.values.toList()
+        imagesByProduct[product.id]?.takeIf { it.isNotEmpty() }
+            ?: listOfNotNull(images[product.image])
 }
 
 /**
@@ -129,11 +140,24 @@ class ShopViewModel(
      * goi moi anh mot lan (N+1 request).
      */
     private suspend fun loadImages(products: List<Product>) {
-        val imageIds = products.map { it.image }.filter { it.isNotBlank() }.distinct()
-        if (imageIds.isEmpty()) return
-        val loaded = productRepository.loadImages(imageIds)
+        if (products.isEmpty()) return
+        // Anh cua tung san pham (query theo productId) de man chi tiet hien
+        // dung anh cua san pham do, khong lan sang san pham khac.
+        val perProduct = products.mapNotNull { product ->
+            productRepository.loadImagesOf(product.id)
+                .takeIf { it.isNotEmpty() }
+                ?.let { product.id to it.map { image -> image.data } }
+        }.toMap()
+
+        // Anh dai dien cho luoi san pham — doc theo id trong mot lan.
+        val coverIds = products.map { it.image }.filter { it.isNotBlank() }.distinct()
+        val covers = productRepository.loadImages(coverIds)
+
         _uiState.update { state ->
-            state.copy(images = loaded.associate { it.id to it.data })
+            state.copy(
+                images = covers.associate { it.id to it.data },
+                imagesByProduct = perProduct,
+            )
         }
     }
 

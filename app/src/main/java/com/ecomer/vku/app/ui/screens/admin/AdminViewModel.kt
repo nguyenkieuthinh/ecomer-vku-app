@@ -197,7 +197,8 @@ class AdminViewModel(
     /** Bat dau sua mot san pham kem tai anh cu cua no. */
     fun startEdit(product: Product) {
         viewModelScope.launch {
-            val loaded = productRepository.loadImages(listOf(product.image))
+            // Load TAT CA anh cua san pham de admin sua duoc nhieu anh.
+            val loaded = productRepository.loadImagesOf(product.id)
             val images = loaded.map {
                 AdminImage(
                     id = it.id,
@@ -270,7 +271,7 @@ class AdminViewModel(
             val removedIds = if (editing == null) {
                 emptyList()
             } else {
-                val currentIds = productRepository.loadImages(listOf(editing.image)).map { it.id }
+                val currentIds = productRepository.loadImagesOf(editing.id).map { it.id }
                 currentIds.filter { id -> id !in keptIds }
             }
 

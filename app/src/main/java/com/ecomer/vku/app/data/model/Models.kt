@@ -38,6 +38,7 @@ data class Product(
  * @param data duong dan base64 cua anh, kem tien to "data:image/jpeg;base64,".
  * @param tenFile ten file goc cua anh.
  * @param order thu tu hien thi (0 la anh dau).
+ * @param sizeBytes dung luong cua anh sau khi nen (byte) — de hien thi tong.
  */
 data class ProductImage(
     val id: String = "",
@@ -46,6 +47,7 @@ data class ProductImage(
     val data: String = "",
     val tenFile: String = "",
     val order: Int = 0,
+    val sizeBytes: Long = 0,
 ) {
     companion object {
         const val COLLECTION = "product_images"

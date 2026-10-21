@@ -112,6 +112,25 @@ class ProductRepository(
     }
 
     /**
+     * Doc TAT CA anh cua mot san pham (theo thu tu hien thi).
+     *
+     * Dung o man chi tiet san pham va khi sua san pham trong admin.
+     */
+    suspend fun loadImagesOf(productId: String): List<ProductImage> {
+        val db = firestore ?: return emptyList()
+        if (productId.isBlank()) return emptyList()
+        return runCatching {
+            db.collection(ProductImage.COLLECTION)
+                .whereEqualTo("productId", productId)
+                .get()
+                .await()
+                .documents
+                .map { it.toProductImage() }
+                .sortedBy { it.order }
+        }.getOrElse { emptyList() }
+    }
+
+    /**
      * Theo doi TAT CA anh cua mot san pham, theo thu tu hien thi.
      * Dung o man chi tiet san pham de xem / vuot qua cac anh.
      */
@@ -177,6 +196,7 @@ class ProductRepository(
                     "tieuDe" to product.tenSanPham.trim(),
                     "data" to image.data,
                     "tenFile" to image.tenFile,
+                    "sizeBytes" to image.sizeBytes,
                     "order" to index,
                     "createdAt" to com.google.firebase.Timestamp.now(),
                 )
@@ -260,8 +280,19 @@ class ProductRepository(
         val snapshot = productRef.get().await()
         val imageId = snapshot.getString("image").orEmpty()
 
+        // Xoa TAT CA anh cua san pham, khong chi anh dai dien.
         runCatching {
-            db.collection(ProductImage.COLLECTION).document(imageId).delete().await()
+            db.collection(ProductImage.COLLECTION)
+                .whereEqualTo("productId", id)
+                .get()
+                .await()
+                .documents
+                .forEach { it.reference.delete().await() }
+        }
+        if (imageId.isNotBlank()) {
+            runCatching {
+                db.collection(ProductImage.COLLECTION).document(imageId).delete().await()
+            }
         }
         runCatching {
             db.collection(ProductImage.HIDDEN_COLLECTION).document(id).delete().await()
@@ -309,6 +340,7 @@ class ProductRepository(
         data = getString("data").orEmpty(),
         tenFile = getString("tenFile").orEmpty(),
         order = (get("order") as? Number)?.toInt() ?: 0,
+        sizeBytes = (get("sizeBytes") as? Number)?.toLong() ?: 0L,
     )
 
     companion object {

@@ -169,9 +169,6 @@ fun AdminProductsScreen(
             imeAction = ImeAction.Done,
             onNext = { viewModel.save() },
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Spacer(modifier = Modifier.height(8.dp))
-
         Spacer(modifier = Modifier.height(16.dp))
 
         // Tieu de danh sach anh + tong dung luong
