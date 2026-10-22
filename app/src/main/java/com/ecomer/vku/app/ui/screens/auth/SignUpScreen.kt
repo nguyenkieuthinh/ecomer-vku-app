@@ -23,14 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -38,10 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.launch
 import com.ecomer.vku.app.ui.components.EcomerField
 import com.ecomer.vku.app.ui.components.ErrorBanner
-import com.ecomer.vku.app.ui.components.GoogleSignInButton
 import com.ecomer.vku.app.ui.components.PrimaryButton
 import com.ecomer.vku.app.ui.theme.EcomerBackground
 import com.ecomer.vku.app.ui.theme.EcomerPrimary
@@ -56,37 +51,15 @@ fun SignUpScreen(
     onNavigateToSignIn: () -> Unit,
     viewModel: AuthViewModel = viewModel(),
 ) {
-    val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
 
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
     var showPassword by rememberSaveable { mutableStateOf(false) }
-    var googleBusy by remember { mutableStateOf(false) }
-
-    val googleIdToken = rememberGoogleIdTokenProvider()
 
     LaunchedEffect(state.success) {
         if (state.success) onSignedUp()
-    }
-
-    fun startGoogle() {
-        if (state.loading) return
-        googleBusy = true
-        scope.launch {
-            try {
-                val idToken = googleIdToken(context)
-                viewModel.signInWithGoogleIdToken(idToken)
-            } catch (cancel: GoogleSignInCancelled) {
-                viewModel.showError(cancel.message ?: "Đã huỷ đăng nhập Google.")
-            } catch (error: Throwable) {
-                viewModel.showError(error.friendlyMessage())
-            } finally {
-                googleBusy = false
-            }
-        }
     }
 
     Column(
@@ -108,7 +81,7 @@ fun SignUpScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Cửa hàng trực tuyến",
+                text = "Hệ thống nhập liệu sản phẩm",
                 fontSize = 13.sp,
                 color = EcomerPrimary,
             )
@@ -133,7 +106,8 @@ fun SignUpScreen(
             value = password,
             onValueChange = { password = it },
             placeholder = "Mật khẩu",
-            isPassword = !showPassword,
+            isPassword = true,
+            passwordVisible = showPassword,
             trailing = {
                 Icon(
                     imageVector = if (showPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
@@ -150,7 +124,8 @@ fun SignUpScreen(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
             placeholder = "Xác nhận mật khẩu",
-            isPassword = !showPassword,
+            isPassword = true,
+            passwordVisible = showPassword,
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -167,13 +142,6 @@ fun SignUpScreen(
             text = if (state.loading) "ĐANG XỬ LÝ..." else "ĐĂNG KÝ",
             onClick = { viewModel.signUp(email, password, confirmPassword) },
             enabled = !state.loading,
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-        GoogleSignInButton(
-            enabled = !state.loading && !googleBusy,
-            label = if (googleBusy) "Đang mở Google…" else "Đăng nhập với Gmail",
-            onClick = { startGoogle() },
         )
 
         Spacer(modifier = Modifier.height(16.dp))

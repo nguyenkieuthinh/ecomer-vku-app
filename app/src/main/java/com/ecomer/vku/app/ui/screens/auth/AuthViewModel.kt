@@ -84,20 +84,6 @@ class AuthViewModel(
         }
     }
 
-    /** Dang nhap bang Gmail tu Google ID token. */
-    fun signInWithGoogleIdToken(idToken: String) {
-        _uiState.update { it.copy(loading = true, error = null) }
-        viewModelScope.launch {
-            authRepository.signInWithGoogleIdToken(idToken)
-                .onSuccess { loadUser() }
-                .onFailure { e ->
-                    _uiState.update {
-                        it.copy(loading = false, error = e.friendlyMessage(), success = false)
-                    }
-                }
-        }
-    }
-
     /** Gui email dat lai mat khau. */
     fun sendPasswordReset(email: String) {
         if (email.isBlank()) {
@@ -180,9 +166,6 @@ fun Throwable.friendlyMessage(): String {
         raw.contains("no user record", ignoreCase = true) ||
             raw.contains("no account exists", ignoreCase = true) ->
             "Không tìm thấy tài khoản này"
-        raw.contains("failed to get google id token", ignoreCase = true) ||
-            raw.contains("getcredential", ignoreCase = true) ->
-            "Không đăng nhập được bằng Gmail, thử lại"
         raw.contains("network", ignoreCase = true) ->
             "Lỗi mạng, kiểm tra kết nối rồi thử lại"
         raw.contains("Firebase chưa được cấu hình", ignoreCase = true) ->

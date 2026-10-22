@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val startDestination = if (FirebaseExt.auth?.currentUser != null) {
-            Screen.HOME
+            Screen.PRODUCTS
         } else {
             Screen.SIGN_IN
         }

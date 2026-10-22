@@ -90,28 +90,6 @@ class UserRepository(
         emit(loaded)
     }
 
-    /**
-     * Danh sach tat ca nguoi dung (chi admin doc duoc theo Rules).
-     * Sap xep: dang nhap gan nhat truoc.
-     */
-    fun observeAllUsers(): Flow<List<User>> = callbackFlow {
-        val db = firestore
-        if (db == null) {
-            trySend(emptyList())
-            return@callbackFlow
-        }
-        val registration = db.collection(COLLECTION)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    trySend(emptyList())
-                    return@addSnapshotListener
-                }
-                val users = snapshot?.documents?.map { it.toUser() } ?: emptyList()
-                trySend(users.sortedByDescending { it.lastLoginAt })
-            }
-        awaitClose { registration.remove() }
-    }
-
     private fun com.google.firebase.firestore.DocumentSnapshot.toUser() = User(
         uid = id,
         email = getString("email").orEmpty(),

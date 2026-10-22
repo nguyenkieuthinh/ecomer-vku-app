@@ -3,26 +3,15 @@ package com.ecomer.vku.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.password
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +41,10 @@ import com.ecomer.vku.app.ui.theme.EcomerTextPrimary
  *
  * @param imeAction phim Enter se gan nhu nao: Next de chuyen o, Done de ket thuc.
  * @param onNext goi khi bam Enter (voi [imeAction] la Next hoac Done).
+ * @param isPassword true = day la O MAT KHAU. O nay luon duoc bao cho ban phim
+ *   biet la mat khau (xem [passwordVisible]).
+ * @param passwordVisible true = hien mat khau (nut con mat). Chi quyet dinh
+ *   MAN HINH, khong quyet dinh ban phim — xem ghi chu ben duoi.
  */
 @Composable
 fun EcomerField(
@@ -59,6 +53,7 @@ fun EcomerField(
     placeholder: String,
     modifier: Modifier = Modifier,
     isPassword: Boolean = false,
+    passwordVisible: Boolean = false,
     keyboardType: KeyboardType = KeyboardType.Text,
     singleLine: Boolean = true,
     heightDp: Int = 48,
@@ -66,6 +61,9 @@ fun EcomerField(
     onNext: (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
+    // Chi khi o mat khau CHE mat moi che chuoi.
+    val masked = isPassword && !passwordVisible
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -93,9 +91,27 @@ fun EcomerField(
                     fontSize = 15.sp,
                 ),
                 cursorBrush = SolidColor(EcomerPrimary),
-                visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+                visualTransformation = if (masked) PasswordVisualTransformation() else VisualTransformation.None,
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    keyboardType = keyboardType,
+                    // O MAT KHAU LUON dung KeyboardType.Password va tat
+                    // autoCorrect — nguoi goi khong can truyen.
+                    //
+                    // Ly do: chi dung PasswordVisualTransformation thi CHI CHE
+                    // HIEN THI tren man hinh. Ban phim van nhan duoc chuoi mat
+                    // khau THAT -> no hoc, tu dong hoc va luu vao dai "de xuat"
+                    // cua may (dong hoai, dung chung).
+                    //
+                    // KeyboardType.Password bien doi thanh
+                    // EditorInfo.inputType = TYPE_TEXT_VARIATION_PASSWORD
+                    // (129) -> IME biet day la o mat khau va KHONG hoc,
+                    // KHONG hien thi de xuat. autoCorrect = false bo them
+                    // TYPE_TEXT_FLAG_NO_SUGGESTIONS (0x8000).
+                    //
+                    // QUAN TRONG: `passwordVisible` chi doi hien thi, KHONG doi
+                    // keyboardType. Neu hien mat khau ma doi luon keyboardType
+                    // thi IME se lai hoc mat khau — mo lai lo hong.
+                    keyboardType = if (isPassword) KeyboardType.Password else keyboardType,
+                    autoCorrectEnabled = !isPassword,
                     imeAction = imeAction,
                 ),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(
@@ -111,6 +127,17 @@ fun EcomerField(
                         if (isPassword) {
                             Modifier.semantics {
                                 contentDescription = placeholder
+                                // Bao cho he thong autofill biet day la o
+                                // mat khau → dung dung duong dan de luu/nap
+                                // mat khau, khong nham sang truong khac.
+                                //
+                                // `password()` la API public cua Compose
+                                // (SemanticsPropertiesKt). `ContentType` thi
+                                // internal trong Compose 1.7 nen khong dung
+                                // duoc — nhung `password()` la thu Compose tu
+                                // dung internally de danh dau o mat khau cho
+                                // autofill.
+                                password()
                             }
                         } else {
                             Modifier
@@ -181,115 +208,6 @@ fun OutlineButton(
     }
 }
 
-/** Chip danh muc, trang thai active co nen xanh. */
-@Composable
-fun CategoryChip(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            // widthIn + wrapContentWidth: trong LazyRow item duoc do voi minWidth = 0,
-            // Box co height co dinh se bi bop ve 0 chieu rong (chip thanh tron).
-            .wrapContentWidth()
-            .widthIn(min = 44.dp)
-            .height(36.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (selected) EcomerPrimary else Color.White)
-            .border(
-                1.dp,
-                if (selected) EcomerPrimary else EcomerBorder,
-                RoundedCornerShape(18.dp),
-            )
-            .padding(horizontal = 14.dp)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            color = if (selected) Color.White else EcomerTextPrimary,
-            fontSize = 13.sp,
-        )
-    }
-}
-
-/** O so luong "- 1 +" nhu trong man hinh gio hang. */
-@Composable
-fun QuantityStepper(
-    quantity: Int,
-    onDecrease: () -> Unit,
-    onIncrease: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFFF1F4F8))
-                .clickable(onClick = onDecrease),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Remove,
-                contentDescription = "Giảm số lượng",
-                tint = EcomerTextPrimary,
-                modifier = Modifier.size(14.dp),
-            )
-        }
-        Text(
-            text = quantity.toString(),
-            fontSize = 13.sp,
-            color = EcomerTextMuted,
-        )
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFFF1F4F8))
-                .clickable(onClick = onIncrease),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Add,
-                contentDescription = "Tăng số lượng",
-                tint = EcomerTextPrimary,
-                modifier = Modifier.size(14.dp),
-            )
-        }
-    }
-}
-
-/** O tim kiem co icon kinh. */
-@Composable
-fun SearchField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    modifier: Modifier = Modifier,
-) {
-    EcomerField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = placeholder,
-        modifier = modifier,
-        trailing = {
-            Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = "Tìm kiếm",
-                tint = EcomerTextMuted,
-                modifier = Modifier.size(18.dp),
-            )
-        },
-    )
-}
-
 /** The "admin" xanh nho tren ho so. */
 @Composable
 fun RoleBadge(text: String, modifier: Modifier = Modifier) {
@@ -304,42 +222,6 @@ fun RoleBadge(text: String, modifier: Modifier = Modifier) {
             color = Color(0xFF144E92),
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-        )
-    }
-}
-
-/**
- * Nut dang nhap bang Gmail.
- */
-@Composable
-fun GoogleSignInButton(
-    enabled: Boolean,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .background(Color.White, RoundedCornerShape(8.dp))
-            .border(1.5.dp, EcomerBorder, RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            text = "G",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF4285F4),
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Text(
-            text = label,
-            fontSize = 15.sp,
-            color = EcomerTextPrimary,
         )
     }
 }

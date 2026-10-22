@@ -1,4 +1,4 @@
-package com.ecomer.vku.app.ui.screens.admin
+package com.ecomer.vku.app.ui.screens.products
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -25,38 +25,47 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.ecomer.vku.app.data.ImageEncoder
 import com.ecomer.vku.app.data.model.Product
 import com.ecomer.vku.app.ui.components.EcomerField
+import com.ecomer.vku.app.ui.components.EmptyState
 import com.ecomer.vku.app.ui.components.ErrorBanner
 import com.ecomer.vku.app.ui.components.OutlineButton
 import com.ecomer.vku.app.ui.components.PrimaryButton
 import com.ecomer.vku.app.ui.components.ProductImage
+import com.ecomer.vku.app.ui.components.RoleBadge
 import com.ecomer.vku.app.ui.theme.EcomerBackground
-import com.ecomer.vku.app.ui.theme.EcomerBorder
 import com.ecomer.vku.app.ui.theme.EcomerBorderFocus
 import com.ecomer.vku.app.ui.theme.EcomerDanger
 import com.ecomer.vku.app.ui.theme.EcomerPrimary
@@ -65,33 +74,28 @@ import com.ecomer.vku.app.ui.theme.EcomerTextPrimary
 import com.ecomer.vku.app.ui.theme.EcomerWarning
 
 /**
- * Man hinh quan ly san pham (chi admin).
+ * Man hinh du lieu san pham — man hinh chinh cua app sau khi dang nhap.
  *
- * Form them / sua san pham, chon nhieu anh tu thu vien (anh duoc resize ve
- * 1080 px roi nen xuong duoi 700 KB), chon anh dai dien, va danh sach san pham
- * voi nut Sua / Xoa.
+ * - Ai dang nhap cung THAY tat ca san pham (cua minh va cua nguoi khac).
+ * - User thuong: chi SUA / XOA san pham do chinh minh nhap.
+ * - Admin: sua / xoa tat ca san pham.
+ *
+ * Quyen duoc Firestore Rules kiem tra o server.
  */
 @Composable
-fun AdminProductsScreen(
-    onBack: () -> Unit,
-    onViewProduct: (Product) -> Unit = {},
-    viewModel: AdminViewModel = viewModel(),
+fun ProductsScreen(
+    onSignOut: () -> Unit,
+    viewModel: ProductsViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    // Enter chuyen o giua cac truong, giup nhap lien tuc kh dung chuot.
+    // Enter chuyen o giua cac truong, giup nhap lien tuc khong can chuot.
     val nameFocus = remember { FocusRequester() }
     val categoryFocus = remember { FocusRequester() }
     val priceFocus = remember { FocusRequester() }
-    val stockFocus = remember { FocusRequester() }
-    val descriptionFocus = remember { FocusRequester() }
 
-    // Chon nhieu anh mot luc tu thu vien (khong can quyen doc bo nho).
-    //
-    // Luu y: `PickMultipleVisualMedia` tra ve LIST RONG neu nguoi dung chon
-    // nhieu hon `maxItems`. Nen dat maxItems rat lon va tu cat lai phia duoi
-    // de nguoi dung chon bao nhieu cung duoc.
+    // Chon nhieu anh mot luc tu thu vien.
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(MAX_PICK)
     ) { uris ->
@@ -105,37 +109,83 @@ fun AdminProductsScreen(
             .statusBarsPadding()
             .padding(horizontal = 20.dp),
     ) {
+        // Thanh tieu de + tai khoan
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp),
+                .padding(top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "← Quay lại",
-                fontSize = 14.sp,
-                color = EcomerTextMuted,
-                modifier = Modifier.clickable(onClick = onBack),
+                text = if (state.editing != null) "Sửa sản phẩm" else "Dữ liệu sản phẩm",
+                fontFamily = FontFamily.Serif,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = EcomerTextPrimary,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
             )
+
+            Box {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { viewModel.toggleAccountMenu() }
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = state.userEmail.ifBlank { "Tài khoản" },
+                        fontSize = 11.sp,
+                        color = EcomerTextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.width(110.dp),
+                        textAlign = TextAlign.End,
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.ArrowDropDown,
+                        contentDescription = "Tài khoản",
+                        tint = EcomerTextMuted,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = state.accountMenuOpen,
+                    onDismissRequest = viewModel::closeAccountMenu,
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(
+                            text = state.userEmail,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = EcomerTextPrimary,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        RoleBadge(text = if (state.isAdmin) "admin" else "khách")
+                    }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Đăng xuất", color = EcomerDanger) },
+                        onClick = { viewModel.signOut(onSignOut) },
+                    )
+                }
+            }
         }
 
-        Text(
-            text = if (state.editing != null) "Sửa sản phẩm" else "Dữ liệu sản phẩm",
-            fontFamily = FontFamily.Serif,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            color = EcomerTextPrimary,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         if (state.message != null) {
-            ErrorBanner(
-                message = state.message!!,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
+            if (state.messageIsError) {
+                ErrorBanner(
+                    message = state.message!!,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            } else {
+                SuccessBanner(
+                    message = state.message!!,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            }
         }
 
         // Form them / sua
@@ -171,59 +221,28 @@ fun AdminProductsScreen(
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Tieu de danh sach anh + tong dung luong
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Hình ảnh (${state.imageCount} ảnh)",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = EcomerTextPrimary,
-            )
-            if (state.imageCount > 0) {
-                Text(
-                    text = "Tổng ${formatSize(state.totalSize)}",
-                    fontSize = 12.sp,
-                    color = EcomerTextMuted,
-                )
-            }
-        }
-
+        Text(
+            text = "Hình ảnh (${state.imageCount} ảnh)",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = EcomerTextPrimary,
+        )
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Danh sach anh da chon
         if (state.images.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 itemsIndexed(state.images) { index, image ->
-                    // Anh dau tien trong danh sach la anh dai dien.
-                    val isCover = index == 0
-                    AdminImageThumb(
+                    ProductImageThumb(
                         image = image,
-                        isCover = isCover,
+                        isCover = index == 0,
                         onClick = { viewModel.setCover(index) },
                         onRemove = { viewModel.removeImage(index) },
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Ảnh được nén về cạnh dài tối đa ${ImageEncoder.MAX_DIMENSION} px, " +
-                    "mỗi ảnh dưới ${ImageEncoder.TARGET_BYTES / 1024} KB. " +
-                    "Bấm vào ảnh để chọn làm ảnh đại diện.",
-            fontSize = 12.sp,
-            color = EcomerTextMuted,
-            lineHeight = 18.sp,
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Nut chon anh
         OutlineButton(
             text = "Chọn từ thư viện ảnh",
             onClick = {
@@ -231,11 +250,10 @@ fun AdminProductsScreen(
                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                 )
             },
-            modifier = Modifier.padding(bottom = 8.dp),
             heightDp = 44,
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         PrimaryButton(
             text = when {
@@ -249,9 +267,8 @@ fun AdminProductsScreen(
         )
 
         if (state.editing != null) {
-            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Hủy sửa",
+                text = "Huỷ sửa",
                 fontSize = 13.sp,
                 color = EcomerTextMuted,
                 modifier = Modifier
@@ -262,7 +279,7 @@ fun AdminProductsScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
             text = "Danh sách sản phẩm:",
@@ -275,24 +292,50 @@ fun AdminProductsScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn(
-            contentPadding = PaddingValues(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.weight(1f),
-        ) {
-            items(state.products, key = { it.id }) { product ->
-                AdminProductRow(
-                    product = product,
-                    imageUrl = state.thumbnail(product),
-                    onEdit = { viewModel.startEdit(product) },
-                    onDelete = { viewModel.delete(product) },
-                    onView = { onViewProduct(product) },
-                    onToggleVisibility = {
-                        viewModel.setVisibility(product, !product.visible)
-                    },
-                )
+        if (state.products.isEmpty()) {
+            EmptyState(message = "Chưa có sản phẩm nào")
+        } else {
+            LazyColumn(
+                contentPadding = PaddingValues(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                items(state.products, key = { it.id }) { product ->
+                    ProductRow(
+                        product = product,
+                        imageUrl = state.thumbnail(product),
+                        canModify = viewModel.canModify(product),
+                        onEdit = { viewModel.startEdit(product) },
+                        onDelete = { viewModel.requestDelete(product) },
+                    )
+                }
             }
         }
+    }
+
+    // Hop thoai xac nhan xoa
+    val pendingDelete = state.pendingDelete
+    if (pendingDelete != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::cancelDelete,
+            title = { Text("Xoá sản phẩm?") },
+            text = {
+                Text(
+                    "\"${pendingDelete.tenSanPham}\" sẽ bị xoá vĩnh viễn, " +
+                            "kèm toàn bộ ảnh của nó."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmDelete) {
+                    Text("Xoá", color = EcomerDanger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelDelete) {
+                    Text("Huỷ")
+                }
+            },
+        )
     }
 }
 
@@ -300,14 +343,14 @@ fun AdminProductsScreen(
  * Anh nho trong form, co badge "Đại diện" va nut xoa.
  */
 @Composable
-private fun AdminImageThumb(
-    image: AdminImage,
+private fun ProductImageThumb(
+    image: ProductImageDraft,
     isCover: Boolean,
     onClick: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.size(96.dp)) {
+    Box(modifier = modifier.size(88.dp)) {
         ProductImage(
             imageUrl = image.data,
             contentDescription = image.tenFile,
@@ -317,7 +360,6 @@ private fun AdminImageThumb(
                 .clickable(onClick = onClick),
         )
 
-        // Badge "Đại diện"
         if (isCover) {
             Box(
                 modifier = Modifier
@@ -335,7 +377,6 @@ private fun AdminImageThumb(
             }
         }
 
-        // Nut xoa
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -352,44 +393,19 @@ private fun AdminImageThumb(
                 modifier = Modifier.size(14.dp),
             )
         }
-
-        // Ten file + dung luong
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(horizontal = 4.dp, vertical = 3.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = image.tenFile.ifBlank { "ảnh" },
-                color = Color.White,
-                fontSize = 9.sp,
-                maxLines = 1,
-            )
-            Text(
-                text = formatSize(image.sizeBytes),
-                color = Color.White,
-                fontSize = 9.sp,
-            )
-        }
     }
 }
 
 /**
- * Mot san pham trong danh sach quan ly, kem nut Sua / Xoa.
- *
- * Bam vao san pham se mo man hinh chi tiet — khong can nut rieng.
+ * Mot san pham trong danh sach: anh + 3 thong tin chinh + nut Sua / Xoa.
  */
 @Composable
-fun AdminProductRow(
+private fun ProductRow(
     product: Product,
     imageUrl: String,
+    canModify: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onView: () -> Unit,
-    onToggleVisibility: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -398,7 +414,6 @@ fun AdminProductRow(
             .clip(RoundedCornerShape(10.dp))
             .background(Color.White)
             .border(1.5.dp, EcomerBorderFocus, RoundedCornerShape(10.dp))
-            .clickable(onClick = onView)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -409,31 +424,12 @@ fun AdminProductRow(
         )
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "Tên sp: ${product.tenSanPham}",
-                    fontSize = 13.sp,
-                    lineHeight = 20.sp,
-                    color = EcomerTextPrimary,
-                )
-                // San pham da an khong hien voi khach.
-                if (!product.visible) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFFFDECEA))
-                            .padding(horizontal = 5.dp, vertical = 1.dp),
-                    ) {
-                        Text(
-                            text = "Đã ẩn",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = EcomerDanger,
-                        )
-                    }
-                }
-            }
+            Text(
+                text = "Tên sp: ${product.tenSanPham}",
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                color = EcomerTextPrimary,
+            )
             Text(
                 text = "Giá sp: ${product.gia}",
                 fontSize = 13.sp,
@@ -447,68 +443,45 @@ fun AdminProductRow(
                 color = EcomerTextPrimary,
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            SmallActionButton(
-                text = "Sửa",
-                textColor = EcomerWarning,
-                borderColor = EcomerWarning,
-                onClick = onEdit,
-            )
-            SmallActionButton(
-                text = "Xóa",
-                textColor = EcomerDanger,
-                borderColor = EcomerDanger,
-                onClick = onDelete,
-            )
-            // Bat / tat hien san pham trong cua hang.
-            SmallActionButton(
-                text = if (product.visible) "Ẩn" else "HIỆN",
-                textColor = if (product.visible) EcomerWarning else EcomerPrimary,
-                borderColor = if (product.visible) EcomerWarning else EcomerPrimary,
-                onClick = onToggleVisibility,
-            )
+        // San pham cua nguoi khac: chi xem, khong hien nut sua / xoa.
+        if (canModify) {
+            IconButton(onClick = onEdit) {
+                Icon(
+                    imageVector = Icons.Filled.Edit,
+                    contentDescription = "Sửa sản phẩm",
+                    tint = EcomerWarning,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = "Xoá sản phẩm",
+                    tint = EcomerDanger,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
         }
     }
 }
 
-/**
- * Nut nho cua man hinh quan ly san pham.
- */
+/** Thong bao thanh cong (nen xanh la). */
 @Composable
-private fun SmallActionButton(
-    text: String,
-    textColor: Color,
-    borderColor: Color,
-    onClick: () -> Unit,
-) {
+private fun SuccessBanner(message: String, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
-            .width(52.dp)
-            .height(32.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(Color.White)
-            .border(1.5.dp, borderColor, RoundedCornerShape(6.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFFE7F6EC))
+            .border(1.dp, Color(0xFF9FD8B0), RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        Text(
-            text = text,
-            fontSize = 12.sp,
-            color = textColor,
-        )
+        Text(text = message, color = Color(0xFF1E6B34), fontSize = 13.sp)
     }
 }
 
-/** Dinh dung luong: 612 KB, 1,3 MB. */
-private fun formatSize(bytes: Long): String = when {
-    bytes >= 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
-    bytes >= 1024 -> "${bytes / 1024} KB"
-    else -> "$bytes B"
-}
-
 /**
- * So anh toi da cho moi san pham (gioi han lưu trong Firestore).
+ * So anh toi da cho moi san pham.
  */
 private const val MAX_IMAGES = 10
 

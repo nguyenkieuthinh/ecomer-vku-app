@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -31,7 +30,6 @@ import coil.compose.AsyncImage
 import com.ecomer.vku.app.data.Base64Image
 import com.ecomer.vku.app.ui.theme.EcomerBorder
 import com.ecomer.vku.app.ui.theme.EcomerPlaceholder
-import com.ecomer.vku.app.ui.theme.EcomerPrimary
 import com.ecomer.vku.app.ui.theme.EcomerTextMuted
 
 /**
@@ -82,38 +80,6 @@ fun ProductImage(
     }
 }
 
-/**
- * Avatar vong tron, hien anh tu Google neu co, khong thi hien chu cai dau tien.
- */
-@Composable
-fun UserAvatar(
-    photoUrl: String,
-    name: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .size(64.dp)
-            .clip(CircleShape)
-            .background(EcomerPlaceholder),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (photoUrl.isNotBlank()) {
-            AsyncImage(
-                model = photoUrl,
-                contentDescription = name,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            Text(
-                text = name.trim().take(2).uppercase().ifBlank { "?" },
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF3D4B5C),
-            )
-        }
-    }
-}
-
 /** Hien thi thong bao loi chung. */
 @Composable
 fun ErrorBanner(message: String, modifier: Modifier = Modifier) {
@@ -130,17 +96,6 @@ fun ErrorBanner(message: String, modifier: Modifier = Modifier) {
             color = Color(0xFFB3262D),
             fontSize = 13.sp,
         )
-    }
-}
-
-/** Man hinh trong khi dang tai du lieu. */
-@Composable
-fun LoadingState(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(color = EcomerPrimary)
     }
 }
 
@@ -161,27 +116,6 @@ fun EmptyState(
             color = EcomerTextMuted,
             fontSize = 14.sp,
             textAlign = TextAlign.Center,
-        )
-    }
-}
-
-/** Hang thong bao nho phia duoi man hinh. */
-@Composable
-fun ToastMessage(message: String, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF14202E))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        Text(
-            text = message,
-            color = Color.White,
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

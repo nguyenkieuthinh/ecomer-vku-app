@@ -5,13 +5,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
 
 /**
  * Wrapper quanh Firebase de app khong bi crash khi chua co google-services.json.
  *
  * [EcomerApp] (Application) thu khoi tao Firebase luc app bat. Neu file config
- * bi thieu hoac sai, co [available] se la false va app chay o che do du lieu mau.
+ * bi thieu hoac sai, co [available] se la false va app chay o che do khong co
+ * du lieu.
  */
 object FirebaseExt {
 
@@ -23,9 +23,6 @@ object FirebaseExt {
 
     val firestore: FirebaseFirestore?
         get() = if (available) runCatching { FirebaseFirestore.getInstance() }.getOrNull() else null
-
-    val storage: FirebaseStorage?
-        get() = if (available) runCatching { FirebaseStorage.getInstance() }.getOrNull() else null
 
     /** uid cua nguoi dang dang nhap, null neu chua dang nhap. */
     val currentUserId: String?

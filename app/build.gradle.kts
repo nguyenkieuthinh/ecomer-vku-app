@@ -74,7 +74,6 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
-    implementation("com.google.firebase:firebase-storage")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 

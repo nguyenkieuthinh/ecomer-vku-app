@@ -1,15 +1,17 @@
-package com.ecomer.vku.app.ui.screens.admin
+package com.ecomer.vku.app.ui.screens.products
 
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ecomer.vku.app.data.FirebaseExt
 import com.ecomer.vku.app.data.EncodedImage
+import com.ecomer.vku.app.data.FirebaseExt
 import com.ecomer.vku.app.data.ImageEncoder
 import com.ecomer.vku.app.data.model.Product
+import com.ecomer.vku.app.data.model.User
+import com.ecomer.vku.app.data.repo.AuthRepository
 import com.ecomer.vku.app.data.repo.ProductRepository
-import com.ecomer.vku.app.data.repo.SampleData
+import com.ecomer.vku.app.data.repo.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,15 +19,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Mot anh trong form quan ly san pham.
+ * Mot anh trong form nhap lieu.
  *
  * @param id id cua document anh (rong neu chua luu).
  * @param data du lieu base64.
- * @param fileName ten file hien thi.
- * @param sizeBytes dung luong sau khi nen.
  * @param isNew true neu vua chon va chua luu vao Firestore.
  */
-data class AdminImage(
+data class ProductImageDraft(
     val id: String = "",
     val data: String = "",
     val tenFile: String = "",
@@ -34,35 +34,29 @@ data class AdminImage(
 )
 
 /**
- * Trang thai man hinh quan ly san pham.
+ * Trang thai man hinh du lieu san pham.
  *
  * @param editing san pham dang sua (null neu dang them moi).
  * @param images danh sach anh cua san pham (da luu + moi chon). Anh dau tien
  *   la anh dai dien.
+ * @param pendingDelete san pham dang cho xac nhan xoa.
  */
-data class AdminUiState(
+data class ProductsUiState(
     val products: List<Product> = emptyList(),
-    val categories: List<String> = emptyList(),
     val name: String = "",
     val category: String = "",
     val price: String = "",
-    val images: List<AdminImage> = emptyList(),
+    val images: List<ProductImageDraft> = emptyList(),
     val editing: Product? = null,
     val loading: Boolean = false,
     val message: String? = null,
-    /**
-     * Anh dai dien cua san pham theo id: imageId -> du lieu base64.
-     * Dung de hien thumbnail trong danh sach san pham.
-     */
+    val messageIsError: Boolean = false,
     val thumbnails: Map<String, String> = emptyMap(),
+    val userEmail: String = "",
+    val isAdmin: Boolean = false,
+    val accountMenuOpen: Boolean = false,
+    val pendingDelete: Product? = null,
 ) {
-    /** Tong dung luong cua tat ca anh (byte). */
-    val totalSize: Long get() = images.sumOf { it.sizeBytes }
-
-    /** Anh dang la dai dien — luon la anh dau tinh danh sach. */
-    val coverImage: AdminImage?
-        get() = images.firstOrNull()
-
     /** So anh da chon. */
     val imageCount: Int get() = images.size
 
@@ -71,31 +65,46 @@ data class AdminUiState(
 }
 
 /**
- * ViewModel cho man hinh quan ly san pham (chi admin).
+ * ViewModel cho man hinh du lieu san pham.
+ *
+ * Quyen:
+ * - ai dang nhap cung thay tat ca san pham;
+ * - user thuong chi sua/xoa san pham do chinh minh nhap;
+ * - admin sua/xoa tat ca san pham.
+ *
+ * Quyen that su duoc Firestore Rules kiem tra o server.
  */
-class AdminViewModel(
+class ProductsViewModel(
     private val productRepository: ProductRepository = ProductRepository(),
+    private val authRepository: AuthRepository = AuthRepository(),
+    private val userRepository: UserRepository = UserRepository(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AdminUiState())
-    val uiState: StateFlow<AdminUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(ProductsUiState())
+    val uiState: StateFlow<ProductsUiState> = _uiState.asStateFlow()
+
+    private val firebaseUser = FirebaseExt.auth?.currentUser
+    private val uid: String = firebaseUser?.uid.orEmpty()
+    private val email: String = firebaseUser?.email.orEmpty()
 
     init {
-        loadProducts()
+        val isAdmin = email.lowercase() in User.ADMIN_EMAILS
+        _uiState.update { it.copy(userEmail = email, isAdmin = isAdmin) }
+
+        firebaseUser?.let { user ->
+            viewModelScope.launch { userRepository.ensureUser(user) }
+        }
+
+        if (uid.isNotBlank()) {
+            observeProducts()
+        }
     }
 
-    /** Nap danh sach san pham kem anh de danh sach hien thumbnail. */
-    fun loadProducts() {
+    /** Theo doi tat ca san pham — ai dang nhap cung thay het. */
+    private fun observeProducts() {
         viewModelScope.launch {
-            // Admin thay TAT CA san pham, ke ca san pham da an.
-            productRepository.observeProducts(onlyVisible = false).collect { list ->
-                _uiState.update { state ->
-                    state.copy(
-                        products = list,
-                        categories = listOf(SampleData.CATEGORY_ALL) +
-                                list.map { it.loaiSanPham }.distinct().filter { it.isNotBlank() },
-                    )
-                }
+            productRepository.observeProducts().collect { list ->
+                _uiState.update { it.copy(products = list) }
                 loadThumbnails(list)
             }
         }
@@ -123,15 +132,14 @@ class AdminViewModel(
     fun setCategory(value: String) = _uiState.update { it.copy(category = value) }
 
     /** Cap nhat gia san pham trong form. */
-    fun setPrice(value: String) = _uiState.update { it.copy(price = value.filter { it.isDigit() }) }
-
-
+    fun setPrice(value: String) =
+        _uiState.update { it.copy(price = value.filter { it.isDigit() }) }
 
     /**
      * Chon nhieu anh tu thu vien.
      *
      * Anh duoc resize ve canh dai toi da 1080 px roi nen xuong duoi 700 KB
-     * ngay tai day, nen moi lan chon la du dung luong de luu trong Firestore.
+     * ngay tai day.
      */
     fun addImages(context: Context, uris: List<Uri>) {
         if (uris.isEmpty()) return
@@ -146,21 +154,22 @@ class AdminViewModel(
             }
             _uiState.update { state ->
                 val added = encoded.map {
-                    AdminImage(
+                    ProductImageDraft(
                         data = it.data,
                         tenFile = it.tenFile,
+                        sizeBytes = it.sizeBytes,
                         isNew = true,
                     )
                 }
                 state.copy(
                     loading = false,
                     images = state.images + added,
-                    // Bao cho nguoi dung biet so anh that bai, thay vi im lang.
                     message = if (failed > 0) {
                         "Không đọc được $failed ảnh. Ảnh còn lại đã thêm."
                     } else {
                         null
                     },
+                    messageIsError = failed > 0,
                 )
             }
         }
@@ -169,13 +178,12 @@ class AdminViewModel(
     /**
      * Xoa anh khoi danh sach.
      *
-     * Anh da luu trong Firestore se bi xoa luon khi bam "Cập nhật".
+     * Anh da luu trong Firestore se bi xoa khi bam "Cập nhật".
      */
     fun removeImage(index: Int) {
         _uiState.update { state ->
-            val removed = state.images.getOrNull(index) ?: return@update state
-            val remaining = state.images.filterIndexed { i, _ -> i != index }
-            state.copy(images = remaining)
+            state.images.getOrNull(index) ?: return@update state
+            state.copy(images = state.images.filterIndexed { i, _ -> i != index })
         }
     }
 
@@ -183,8 +191,7 @@ class AdminViewModel(
      * Chon mot anh lam anh dai dien.
      *
      * Anh dai dien luon la anh DUNG DAU danh sach, nen thao tac nay chi can
-     * chuyen anh duoc chon len truoc. Cach nay tranh phai luu them mot truong
-     * id rieng — quan trong vi anh moi chua co id trong Firestore.
+     * chuyen anh duoc chon len truoc.
      */
     fun setCover(index: Int) {
         _uiState.update { state ->
@@ -196,14 +203,15 @@ class AdminViewModel(
 
     /** Bat dau sua mot san pham kem tai anh cu cua no. */
     fun startEdit(product: Product) {
+        if (!canModify(product)) return
         viewModelScope.launch {
-            // Load TAT CA anh cua san pham de admin sua duoc nhieu anh.
             val loaded = productRepository.loadImagesOf(product.id)
             val images = loaded.map {
-                AdminImage(
+                ProductImageDraft(
                     id = it.id,
                     data = it.data,
                     tenFile = it.tenFile,
+                    sizeBytes = it.sizeBytes,
                     isNew = false,
                 )
             }
@@ -214,6 +222,7 @@ class AdminViewModel(
                     category = product.loaiSanPham,
                     price = product.gia.toString(),
                     images = images,
+                    message = null,
                 )
             }
         }
@@ -233,19 +242,19 @@ class AdminViewModel(
     }
 
     /** Luu san pham (them moi hoac cap nhat). */
-    fun save(onDone: () -> Unit = {}) {
+    fun save() {
         val state = _uiState.value
         if (state.name.isBlank()) {
-            _uiState.update { it.copy(message = "Vui lòng nhập tên sản phẩm") }
+            showError("Vui lòng nhập tên sản phẩm")
             return
         }
         if (state.category.isBlank()) {
-            _uiState.update { it.copy(message = "Vui lòng nhập loại sản phẩm") }
+            showError("Vui lòng nhập loại sản phẩm")
             return
         }
         val price = state.price.toLongOrNull()
         if (price == null || price <= 0) {
-            _uiState.update { it.copy(message = "Giá sản phẩm không hợp lệ") }
+            showError("Giá sản phẩm không hợp lệ")
             return
         }
 
@@ -258,16 +267,13 @@ class AdminViewModel(
                 loaiSanPham = state.category,
                 gia = price,
                 image = editing?.image.orEmpty(),
+                ownerId = uid,
             )
 
-            // Anh moi chua luu -> them. Anh cu bi lo -> xoa.
             val newImages = state.images.filter { it.isNew }.map {
                 EncodedImage(it.data, it.tenFile, it.sizeBytes)
             }
-            // Anh cu con lai, theo thu tu hien thi (dau tien la anh dai dien).
             val keptIds = state.images.filterNot { it.isNew }.map { it.id }
-            // Anh cu cua san pham dang sua ma KHONG con trong danh sach
-            // (da bi xoa o form) -> se bi xoa khoi Firestore.
             val removedIds = if (editing == null) {
                 emptyList()
             } else {
@@ -276,79 +282,98 @@ class AdminViewModel(
             }
 
             val result = if (editing == null) {
-                productRepository.addProduct(product, newImages)
+                productRepository.addProduct(product, newImages, uid, email)
             } else {
+                if (!canModify(editing)) {
+                    showError("Bạn không có quyền sửa sản phẩm này")
+                    return@launch
+                }
                 productRepository.updateProduct(product, keptIds, newImages, removedIds)
             }
 
             result
                 .onSuccess {
-                    // Luu xong thi xoa form de nhap san pham tiep theo ngay.
-                    // Neu dang sua, giu nguyen hinh thuc "sua" de khong vong lap.
-                    val wasEditing = editing != null
-                    if (wasEditing) {
-                        cancelEdit()
-                    } else {
-                        _uiState.update {
-                            it.copy(
-                                name = "",
-                                category = "",
-                                price = "",
-                                images = emptyList(),
-                                            )
-                        }
-                    }
-                    _uiState.update { it.copy(loading = false, message = "Lưu sản phẩm thành công") }
-                    loadProducts()
-                    onDone()
-                }
-                .onFailure { e ->
-                    _uiState.update {
-                        it.copy(loading = false, message = FirebaseExt.friendlyMessage(e))
-                    }
-                }
-        }
-    }
-
-    /**
-     * Bat hoac tat hien san pham.
-     *
-     * San pham da an khong hien voi khach, admin van thay va bat lai duoc.
-     */
-    fun setVisibility(product: Product, visible: Boolean) {
-        viewModelScope.launch {
-            productRepository.setVisibility(product.id, visible)
-                .onSuccess {
                     _uiState.update {
                         it.copy(
-                            message = if (visible) {
-                                "Đã hiện sản phẩm"
-                            } else {
-                                "Đã ẩn sản phẩm khỏi cửa hàng"
-                            }
+                            editing = null,
+                            name = "",
+                            category = "",
+                            price = "",
+                            images = emptyList(),
+                            loading = false,
+                            message = "Lưu sản phẩm thành công",
+                            messageIsError = false,
                         )
                     }
                 }
-                .onFailure { e ->
-                    _uiState.update { it.copy(message = FirebaseExt.friendlyMessage(e)) }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            loading = false,
+                            message = FirebaseExt.friendlyMessage(error),
+                            messageIsError = true,
+                        )
+                    }
                 }
         }
     }
 
-    /** Xoa san pham. */
-    fun delete(product: Product) {
+    /** Bam nut Xoa — hoi xac nhan truoc. */
+    fun requestDelete(product: Product) {
+        if (!canModify(product)) return
+        _uiState.update { it.copy(pendingDelete = product) }
+    }
+
+    /** Huy hop thoai xac nhan xoa. */
+    fun cancelDelete() = _uiState.update { it.copy(pendingDelete = null) }
+
+    /** Xac nhan xoa san pham. */
+    fun confirmDelete() {
+        val product = _uiState.value.pendingDelete ?: return
+        _uiState.update { it.copy(pendingDelete = null, loading = true) }
         viewModelScope.launch {
             productRepository.deleteProduct(product.id)
                 .onSuccess {
-                    _uiState.update { it.copy(message = "Đã xóa sản phẩm") }
-                    loadProducts()
+                    _uiState.update {
+                        it.copy(
+                            loading = false,
+                            message = "Đã xoá sản phẩm",
+                            messageIsError = false,
+                        )
+                    }
                 }
-                .onFailure { e ->
-                    _uiState.update { it.copy(message = FirebaseExt.friendlyMessage(e)) }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            loading = false,
+                            message = FirebaseExt.friendlyMessage(error),
+                            messageIsError = true,
+                        )
+                    }
                 }
         }
+    }
+
+    /** Mo / dong menu tai khoan. */
+    fun toggleAccountMenu() =
+        _uiState.update { it.copy(accountMenuOpen = !it.accountMenuOpen) }
+
+    fun closeAccountMenu() = _uiState.update { it.copy(accountMenuOpen = false) }
+
+    /** Dang xuat va ve man hinh dang nhap. */
+    fun signOut(onDone: () -> Unit) {
+        authRepository.signOut()
+        _uiState.update { it.copy(accountMenuOpen = false) }
+        onDone()
     }
 
     /** Xoa thong bao. */
     fun clearMessage() = _uiState.update { it.copy(message = null) }
+
+    private fun showError(text: String) =
+        _uiState.update { it.copy(loading = false, message = text, messageIsError = true) }
+
+    /** Chi chu san pham hoac admin moi duoc sua / xoa. */
+    fun canModify(product: Product): Boolean =
+        _uiState.value.isAdmin || product.ownerId == uid
 }
