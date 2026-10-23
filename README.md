@@ -7,6 +7,10 @@
 ![Firebase](https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?logo=firebase&logoColor=black)
 ![minSdk](https://img.shields.io/badge/minSdk-26-3DDC84?logo=android&logoColor=white)
 
+## Video demo
+
+<video src="https://github.com/user-attachments/assets/07a201a7-2078-47fd-abb9-1374db1b7106" controls width="720"></video>
+
 ## Tính năng
 
 - **Đăng nhập / đăng xuất** bằng email + mật khẩu; đổi tài khoản ngay trong app.
@@ -27,6 +31,12 @@
 <img src="docs/review/firestore.png" width="720" alt="Firestore — collection products">
 
 Document sản phẩm trong Firestore chỉ gồm đúng 4 trường: `tenSanPham`, `loaiSanPham`, `gia`, `image`.
+
+### Tài khoản trên Firebase Authentication
+
+<img src="docs/review/auth-nguoi-dung.png" width="720" alt="Firebase Authentication — danh sách người dùng">
+
+Tài khoản đăng nhập bằng email/mật khẩu; mỗi người dùng có hồ sơ tương ứng trong collection `users`.
 
 ## Phân quyền
 

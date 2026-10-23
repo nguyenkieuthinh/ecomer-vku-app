@@ -50,6 +50,7 @@ ADDRESSES_COLLECTION = "addresses"
 COLLECTIONS = [
     "products",
     "product_images",
+    "product_owners",
     "hidden_products",
     "carts",
     "orders",
@@ -66,6 +67,7 @@ COLLECTIONS = [
 # giao vien, KHONG commit len GitHub).
 PERSONAL_FIELDS = {
     "email",
+    "userEmail",
     "fullName",
     "receiverName",
     "displayName",
@@ -276,7 +278,7 @@ def mask_value(value, key: str):
     """Che gia tri cua truong chua thong tin ca nhan."""
     if not isinstance(value, str):
         return value
-    if key == "email":
+    if key in ("email", "userEmail"):
         return mask_email(value)
     if key in ("phone", "receiverPhone"):
         return mask_phone(value)
