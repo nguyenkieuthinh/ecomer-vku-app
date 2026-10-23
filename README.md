@@ -14,6 +14,20 @@
 - **Danh sách sản phẩm**: ảnh + tên + giá + loại; sửa bằng bút chì, xoá bằng thùng rác (có hộp thoại xác nhận).
 - **Phân quyền** kiểm tra ở server bằng Firestore Security Rules.
 
+## Ảnh review
+
+Ảnh được trích từ video demo, cắt đúng phần màn hình ứng dụng và nén còn **dưới 1 MP mỗi ảnh** (giới hạn tải ảnh lên GitHub là 20 MP).
+
+| Đăng nhập | Danh sách & thêm sản phẩm | Sửa sản phẩm | Xác nhận xoá |
+|---|---|---|---|
+| <img src="docs/review/dang-nhap.png" width="210" alt="Màn hình đăng nhập"> | <img src="docs/review/danh-sach-san-pham.png" width="210" alt="Danh sách sản phẩm và form thêm"> | <img src="docs/review/sua-san-pham.png" width="210" alt="Màn hình sửa sản phẩm"> | <img src="docs/review/xoa-xac-nhan.png" width="210" alt="Hộp thoại xác nhận xoá"> |
+
+### Dữ liệu trên Firestore
+
+<img src="docs/review/firestore.png" width="720" alt="Firestore — collection products">
+
+Document sản phẩm trong Firestore chỉ gồm đúng 4 trường: `tenSanPham`, `loaiSanPham`, `gia`, `image`.
+
 ## Phân quyền
 
 | Vai trò | Xem sản phẩm | Thêm | Sửa / xoá |
