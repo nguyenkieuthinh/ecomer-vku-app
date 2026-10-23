@@ -8,7 +8,7 @@
 ![minSdk](https://img.shields.io/badge/minSdk-26-3DDC84?logo=android&logoColor=white)
 
 ## Video demo
-
+https://github.com/user-attachments/assets/07a201a7-2078-47fd-abb9-1374db1b7106
 <video src="https://github.com/user-attachments/assets/07a201a7-2078-47fd-abb9-1374db1b7106" controls width="720"></video>
 
 ## Tính năng
